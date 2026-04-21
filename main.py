@@ -6,18 +6,22 @@ import plotly.express as px
 st.set_page_config(page_title="Power Outage Operations Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # --- DATA LOADING & CLEANING ---
+from datetime import datetime
+
 @st.cache_data
 def load_data():
-    # Load the specific files
-    df_today = pd.read_csv("2026-04-21_Outages_Today.csv")
-    df_5day = pd.read_csv("2026-04-21_Outages_Last_5_Days.csv")
+    # Automatically get today's date in YYYY-MM-DD format
+    today_str = datetime.now().strftime("%Y-%m-%d")
     
-    # --- NEW: MAP OUTAGE TYPES ---
-    # Convert 'Power Off By PC' into 'Planned Outage' for both datasets
+    # Dynamically load the files matching today's date
+    df_today = pd.read_csv(f"{today_str}_Outages_Today.csv")
+    df_5day = pd.read_csv(f"{today_str}_Outages_Last_5_Days.csv")
+    
+    # Map outage types
     df_today['Type of Outage'] = df_today['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
     df_5day['Type of Outage'] = df_5day['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
     
-    # Convert time columns to datetime objects for calculations
+    # Convert time columns
     time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
     for col in time_cols:
         df_today[col] = pd.to_datetime(df_today[col], errors='coerce')
