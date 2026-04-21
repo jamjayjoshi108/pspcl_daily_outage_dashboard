@@ -5,12 +5,17 @@ import plotly.express as px
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Power Outage Operations Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-# --- DATA LOADING ---
+# --- DATA LOADING & CLEANING ---
 @st.cache_data
 def load_data():
-    # Load the specific files you mentioned
+    # Load the specific files
     df_today = pd.read_csv("2026-04-21_Outages_Today.csv")
     df_5day = pd.read_csv("2026-04-21_Outages_Last_5_Days.csv")
+    
+    # --- NEW: MAP OUTAGE TYPES ---
+    # Convert 'Power Off By PC' into 'Planned Outage' for both datasets
+    df_today['Type of Outage'] = df_today['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
+    df_5day['Type of Outage'] = df_5day['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
     
     # Convert time columns to datetime objects for calculations
     time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
@@ -24,6 +29,7 @@ df_today, df_5day = load_data()
 
 # --- GLOBAL NAVIGATION (SIDEBAR) ---
 st.sidebar.header("Global Filters")
+
 # 1. State/Zone Level
 zones = df_today['Zone'].dropna().unique()
 selected_zone = st.sidebar.selectbox("Select Zone", options=["All Zones"] + list(zones))
@@ -56,7 +62,7 @@ with col_today:
     st.metric(label="Active Outages", value=active_outages, delta="Requires Attention", delta_color="inverse")
     
     # 2-Step Drill Down Logic (Division -> S/D -> Feeder)
-    st.subheader("Outage Drill-Down (Planned vs Unplanned)")
+    st.subheader("Outage Drill-Down")
     
     # Step 1: Select Division
     divisions = df_today['Division'].dropna().unique()
@@ -76,14 +82,14 @@ with col_today:
             y='Diff in mins', 
             color='Type of Outage',
             title=f"Feeder Status for {selected_sd}",
-            color_discrete_map={"Unplanned": "red", "Planned": "blue"}
+            color_discrete_map={"Unplanned Outage": "red", "Planned Outage": "blue"}
         )
         st.plotly_chart(fig_feeder, use_container_width=True)
     else:
         st.info("No outages recorded for this Sub-Division today.")
 
     # Top 10 Notorious Feeders (Today)
-    st.subheader(f"Top 10 Notorious Feeders Today")
+    st.subheader("Top 10 Notorious Feeders Today")
     top_10_today = df_today.groupby(['Feeder', 'Type of Outage'])['Diff in mins'].sum().reset_index()
     top_10_today = top_10_today.sort_values(by='Diff in mins', ascending=False).head(10)
     st.dataframe(top_10_today, use_container_width=True, hide_index=True)
@@ -106,7 +112,7 @@ with col_5day:
         y='Diff in mins', 
         color='Type of Outage',
         barmode='group',
-        color_discrete_map={"Unplanned": "red", "Planned": "blue"}
+        color_discrete_map={"Unplanned Outage": "red", "Planned Outage": "blue"}
     )
     st.plotly_chart(fig_trend, use_container_width=True)
 
@@ -114,25 +120,16 @@ with col_5day:
     st.subheader("⚠️ Critical Alert: 5-Day Consecutive Repeaters")
     
     if not df_5day.empty:
-        # 1. Sum daily duration per feeder
         daily_feeder = df_5day.groupby(['Date Only', 'Circle', 'Division', 'Feeder'])['Diff in mins'].sum().reset_index()
-        
-        # 2. Rank feeders per circle per day
         daily_feeder['Daily Rank'] = daily_feeder.groupby(['Date Only', 'Circle'])['Diff in mins'].rank(method='dense', ascending=False)
-        
-        # 3. Filter to those who hit the Top 10 on any given day
         top_daily = daily_feeder[daily_feeder['Daily Rank'] <= 10]
-        
-        # 4. Count how many unique days they appeared in the Top 10
         consecutive_counts = top_daily.groupby(['Circle', 'Division', 'Feeder']).size().reset_index(name='Days in Top 10')
-        
-        # 5. Filter to those who appear exactly 5 times (all 5 days)
         critical_repeaters = consecutive_counts[consecutive_counts['Days in Top 10'] == 5]
         
         if not critical_repeaters.empty:
             st.error("The following feeders have been in the Top 10 highest outage durations for 5 consecutive days.")
             st.dataframe(critical_repeaters, use_container_width=True, hide_index=True)
         else:
-            st.success("No feeders have hit the notorious list for 5 consecutive days. Good job!")
+            st.success("No feeders have hit the notorious list for 5 consecutive days.")
     else:
         st.info("Insufficient 5-day data available.")
