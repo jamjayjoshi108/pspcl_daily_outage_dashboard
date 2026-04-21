@@ -3,8 +3,7 @@ name: Daily PSPCL Data Scrape
 # This triggers the workflow automatically every day and allows you to click a button to run it manually
 on:
   schedule:
-    # This runs at 2:30 AM UTC, which is 8:00 AM IST. Adjust the hour if needed.
-    - cron: '30 2 * * *' 
+    - cron: '30 14 * * *'
   workflow_dispatch: 
 
 # Grants permission to push the new CSV files back into your repository
