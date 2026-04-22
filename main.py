@@ -8,8 +8,17 @@ from datetime import datetime, timedelta, timezone
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
 
+# --- UI TWEAKS (Fix Top Margin) ---
+st.markdown("""
+    <style>
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- IST TIMEZONE SETUP ---
-# Forces Streamlit to always use Indian Standard Time (UTC +5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
 
 # --- GITHUB TRIGGER LOGIC ---
@@ -40,9 +49,7 @@ if not os.path.exists(file_today) or not os.path.exists(file_5day):
     lock_file = "scraper_lock.txt"
     should_trigger = True
     
-    # Cooldown check: Prevent spamming GitHub if you refresh while waiting
     if os.path.exists(lock_file):
-        # If the lock file is less than 5 minutes old, don't trigger again
         if time.time() - os.path.getmtime(lock_file) < 300: 
             should_trigger = False
             
@@ -50,7 +57,6 @@ if not os.path.exists(file_today) or not os.path.exists(file_5day):
         success = trigger_scraper()
         
         if success:
-            # Only create the lock file and tell the user to wait IF the trigger actually worked
             with open(lock_file, "w") as f:
                 f.write(str(time.time()))
             st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
@@ -119,11 +125,10 @@ with col_left:
 
     st.divider()
 
-    # Zone-wise Table (Replaces Bar Chart)
+    # Zone-wise Table
     st.subheader("Zone-wise Distribution (Today)")
     if not df_today.empty:
         zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
-        # Ensure columns exist even if data is missing for one type
         if 'Planned Outage' not in zone_today: zone_today['Planned Outage'] = 0
         if 'Unplanned Outage' not in zone_today: zone_today['Unplanned Outage'] = 0
         zone_today['Total'] = zone_today['Planned Outage'] + zone_today['Unplanned Outage']
@@ -147,13 +152,17 @@ with col_right:
     
     with kpi3:
         st.metric("Total Planned Outages", len(fiveday_planned))
+        # UI FIX: Invisible spacer to align with the left column's Active/Closed caption
+        st.caption("&nbsp;") 
         
     with kpi4:
         st.metric("Total Unplanned Outages", len(fiveday_unplanned))
+        # UI FIX: Invisible spacer to align with the left column's Active/Closed caption
+        st.caption("&nbsp;")
 
     st.divider()
 
-    # Zone-wise Table (Replaces Bar Chart)
+    # Zone-wise Table
     st.subheader("Zone-wise Distribution (5 Days)")
     if not df_5day.empty:
         zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
@@ -199,7 +208,6 @@ st.subheader("Feeder Drill-Down Details")
 if not combined_circle.empty:
     selected_circle = st.selectbox("Select a Circle to view detailed feeder lists:", options=combined_circle.index)
     
-    # Split the drill-down view so it matches the combined table logic
     drill_left, drill_right = st.columns(2)
     
     with drill_left:
