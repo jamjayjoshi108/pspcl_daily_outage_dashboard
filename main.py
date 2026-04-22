@@ -283,7 +283,7 @@ if not combined_circle.empty:
         combined_circle, 
         use_container_width=True,
         on_select="rerun",
-        selection_mode="single_row"
+        selection_mode="single-row"  # Changed from single_row to single-row
     )
 
     # 4. Unified Feeder Drill-Down Triggered by Table Click
