@@ -43,6 +43,7 @@ st.markdown("""
             padding-bottom: 10px;
             margin-bottom: 30px !important;
             font-size: 2.2rem !important;
+            color: #004085 !important; /* Update this line */
         }
         
         h2 {
