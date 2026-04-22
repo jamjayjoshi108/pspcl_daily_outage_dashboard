@@ -152,8 +152,6 @@ def trigger_scraper():
     repo_owner = "jamjayjoshi108"
     repo_name = "pspcl_daily_outage_dashboard" 
     
-    # url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/daily_scrape.yml/dispatches"
-    # Using the exact Workflow ID from your diagnostic test
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/263899469/dispatches"
     headers = {
         "Accept": "application/vnd.github.v3+json",
@@ -172,7 +170,6 @@ def trigger_scraper():
 now_ist = datetime.now(IST)
 today_str = now_ist.strftime("%Y-%m-%d")
 
-# Calculate Last Year's Date safely
 try:
     ly_date = now_ist.replace(year=now_ist.year - 1)
 except ValueError:
@@ -184,7 +181,6 @@ file_5day = f"{today_str}_Outages_Last_5_Days.csv"
 file_today_ly = f"{ly_str}_Outages_Today_Last_Year.csv"
 file_5day_ly = f"{ly_str}_Outages_Last_5_Days_Last_Year.csv"
 
-# Check if ANY of the 4 files are missing
 files_missing = not (
     os.path.exists(file_today) and 
     os.path.exists(file_5day) and 
@@ -245,6 +241,53 @@ def load_data(f_today, f_5day):
     return df_today, df_5day
 
 df_today, df_5day = load_data(file_today, file_5day)
+df_today_ly, df_5day_ly = load_data(file_today_ly, file_5day_ly)
+
+# --- HELPER FUNCTIONS FOR TABLES ---
+def create_bucket_pivot(df, bucket_order):
+    if df.empty:
+        return pd.DataFrame(columns=bucket_order + ['Total'])
+    pivot = pd.crosstab(df['Circle'], df['Duration Bucket'])
+    pivot = pivot.reindex(columns=[c for c in bucket_order if c in pivot.columns], fill_value=0)
+    pivot['Total'] = pivot.sum(axis=1)
+    return pivot
+
+def generate_yoy_dist(df_curr, df_ly, group_col):
+    """Generates a structured YoY comparison dataframe by Zone or Circle."""
+    if df_curr.empty:
+        c_grp = pd.DataFrame(columns=[group_col, 'Planned Outage', 'Unplanned Outage'])
+    else:
+        c_grp = df_curr.groupby([group_col, 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+        
+    if df_ly.empty:
+        l_grp = pd.DataFrame(columns=[group_col, 'Planned Outage', 'Unplanned Outage'])
+    else:
+        l_grp = df_ly.groupby([group_col, 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+
+    for col in ['Planned Outage', 'Unplanned Outage']:
+        if col not in c_grp.columns: c_grp[col] = 0
+        if col not in l_grp.columns: l_grp[col] = 0
+
+    c_grp['Curr Total'] = c_grp['Planned Outage'] + c_grp['Unplanned Outage']
+    l_grp['LY Total'] = l_grp['Planned Outage'] + l_grp['Unplanned Outage']
+    
+    c_grp = c_grp.rename(columns={'Planned Outage': 'Curr Planned', 'Unplanned Outage': 'Curr Unplanned'})
+    l_grp = l_grp.rename(columns={'Planned Outage': 'LY Planned', 'Unplanned Outage': 'LY Unplanned'})
+    
+    merged = pd.merge(c_grp, l_grp, on=group_col, how='outer').fillna(0)
+    
+    for col in ['Curr Planned', 'Curr Unplanned', 'Curr Total', 'LY Planned', 'LY Unplanned', 'LY Total']:
+        merged[col] = merged[col].astype(int)
+        
+    merged['YoY Delta (Total)'] = merged['Curr Total'] - merged['LY Total']
+    return merged[[group_col, 'Curr Planned', 'LY Planned', 'Curr Unplanned', 'LY Unplanned', 'Curr Total', 'LY Total', 'YoY Delta (Total)']]
+
+def highlight_delta(val):
+    """Streamlit styler to highlight negative changes in green and positive in red."""
+    if isinstance(val, int):
+        if val > 0: return 'color: #D32F2F; font-weight: bold;'
+        elif val < 0: return 'color: #388E3C; font-weight: bold;'
+    return ''
 
 # --- NOTORIOUS FEEDERS CALCULATION ---
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
@@ -279,9 +322,6 @@ with tab2:
     st.header("📈 Year-over-Year Comparison")
     st.markdown("Comparing current outage volumes to the exact same timeframe from last year.")
     
-    # We load the YoY data here using the filenames defined at the top
-    df_today_ly, df_5day_ly = load_data(file_today_ly, file_5day_ly)
-    
     # Calculate current counts
     curr_today_p = len(df_today[df_today['Type of Outage'] == 'Planned Outage'])
     curr_today_u = len(df_today[df_today['Type of Outage'] == 'Unplanned Outage'])
@@ -294,17 +334,93 @@ with tab2:
     ly_5day_p = len(df_5day_ly[df_5day_ly['Type of Outage'] == 'Planned Outage'])
     ly_5day_u = len(df_5day_ly[df_5day_ly['Type of Outage'] == 'Unplanned Outage'])
     
-    st.subheader(f"Today vs. Same Day Last Year ({ly_date.strftime('%d %b %Y')})")
-    met1, met2 = st.columns(2)
-    met1.metric(label="Planned Outages (Today)", value=curr_today_p, delta=int(curr_today_p - ly_today_p), delta_color="inverse")
-    met2.metric(label="Unplanned Outages (Today)", value=curr_today_u, delta=int(curr_today_u - ly_today_u), delta_color="inverse")
+    st.subheader(f"Executive Summary vs. Same Day Last Year ({ly_date.strftime('%d %b %Y')})")
+    met1, met2, met3, met4 = st.columns(4)
+    met1.metric(label="Planned (Today)", value=curr_today_p, delta=int(curr_today_p - ly_today_p), delta_color="inverse")
+    met2.metric(label="Unplanned (Today)", value=curr_today_u, delta=int(curr_today_u - ly_today_u), delta_color="inverse")
+    met3.metric(label="Planned (5 Days)", value=curr_5day_p, delta=int(curr_5day_p - ly_5day_p), delta_color="inverse")
+    met4.metric(label="Unplanned (5 Days)", value=curr_5day_u, delta=int(curr_5day_u - ly_5day_u), delta_color="inverse")
     
     st.divider()
+
+    # --- 1) & 1.A) TODAY DISTRIBUTION YOY ---
+    st.subheader("1. Zone-wise Distribution YoY (Today)")
+    yoy_zone_today = generate_yoy_dist(df_today, df_today_ly, 'Zone')
+    st.dataframe(yoy_zone_today.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
+
+    st.subheader("1.A. Circle-wise Distribution YoY (Today)")
+    yoy_circle_today = generate_yoy_dist(df_today, df_today_ly, 'Circle')
+    st.dataframe(yoy_circle_today.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
     
-    st.subheader("Last 5 Days vs. Same 5 Days Last Year")
-    met3, met4 = st.columns(2)
-    met3.metric(label="Planned Outages (5 Days)", value=curr_5day_p, delta=int(curr_5day_p - ly_5day_p), delta_color="inverse")
-    met4.metric(label="Unplanned Outages (5 Days)", value=curr_5day_u, delta=int(curr_5day_u - ly_5day_u), delta_color="inverse")
+    st.divider()
+
+    # --- 2) & 2.A) 5-DAYS DISTRIBUTION YOY ---
+    st.subheader("2. Zone-wise Distribution YoY (5 Days)")
+    yoy_zone_5day = generate_yoy_dist(df_5day, df_5day_ly, 'Zone')
+    st.dataframe(yoy_zone_5day.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
+
+    st.subheader("2.A. Circle-wise Distribution YoY (5 Days)")
+    yoy_circle_5day = generate_yoy_dist(df_5day, df_5day_ly, 'Circle')
+    st.dataframe(yoy_circle_5day.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
+    
+    st.divider()
+
+    # --- 3) NOTORIOUS FEEDERS YOY ---
+    st.subheader("3. 🚨 Current Top Notorious Feeders vs. Last Year")
+    st.markdown("Displays the current top notorious feeders and shows their historical performance exactly a year ago.")
+    
+    if not df_5day_ly.empty:
+        # Calculate LY stats for joining
+        df_5day_ly['Outage Date'] = df_5day_ly['Start Time'].dt.date
+        f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='LY Days Out')
+        f_stats_ly = df_5day_ly.groupby(['Circle', 'Feeder']).agg(
+            LY_Events=('Start Time', 'size'),
+            LY_Mins=('Diff in mins', 'sum')
+        ).reset_index()
+        f_stats_ly['LY Duration (Hrs)'] = (f_stats_ly['LY_Mins'] / 60).round(2)
+        ly_noto = pd.merge(f_days_ly, f_stats_ly[['Circle', 'Feeder', 'LY_Events', 'LY Duration (Hrs)']], on=['Circle', 'Feeder'])
+        
+        noto_yoy = pd.merge(
+            top_5_notorious[['Circle', 'Feeder', 'Days with Outages', 'Total Outage Events', 'Total Duration (Hours)']], 
+            ly_noto, on=['Circle', 'Feeder'], how='left'
+        ).fillna(0)
+        
+        noto_yoy = noto_yoy.rename(columns={
+            'Days with Outages': 'Curr Days Out',
+            'Total Outage Events': 'Curr Events',
+            'Total Duration (Hours)': 'Curr Duration (Hrs)'
+        })
+        
+        # Ensure integers for count columns
+        noto_yoy['LY Days Out'] = noto_yoy['LY Days Out'].astype(int)
+        noto_yoy['LY Events'] = noto_yoy['LY Events'].astype(int)
+        
+        st.dataframe(noto_yoy.style.format({
+            'Curr Duration (Hrs)': '{:.2f}', 
+            'LY Duration (Hrs)': '{:.2f}'
+        }).set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
+    else:
+        st.info("No Notorious Feeder data available to map against Last Year.")
+
+    st.divider()
+
+    # --- 4) COMPREHENSIVE CIRCLE BREAKDOWN YOY ---
+    st.subheader("4. Comprehensive Circle-wise Breakdown YoY (Last 5 Days)")
+    bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
+    
+    curr_5d_p = create_bucket_pivot(df_5day[df_5day['Type of Outage'] == 'Planned Outage'], bucket_order)
+    curr_5d_u = create_bucket_pivot(df_5day[df_5day['Type of Outage'] == 'Unplanned Outage'], bucket_order)
+    ly_5d_p = create_bucket_pivot(df_5day_ly[df_5day_ly['Type of Outage'] == 'Planned Outage'], bucket_order)
+    ly_5d_u = create_bucket_pivot(df_5day_ly[df_5day_ly['Type of Outage'] == 'Unplanned Outage'], bucket_order)
+    
+    comp_p = pd.concat([curr_5d_p, ly_5d_p], axis=1, keys=['Current 5D (Planned)', 'Last Year 5D (Planned)']).fillna(0).astype(int)
+    comp_u = pd.concat([curr_5d_u, ly_5d_u], axis=1, keys=['Current 5D (Unplanned)', 'Last Year 5D (Unplanned)']).fillna(0).astype(int)
+    
+    st.markdown("**Planned Outages Summary:**")
+    st.dataframe(comp_p.style.set_table_styles(HEADER_STYLES), use_container_width=True)
+    
+    st.markdown("**Unplanned Outages Summary:**")
+    st.dataframe(comp_u.style.set_table_styles(HEADER_STYLES), use_container_width=True)
 
 
 with tab1:
@@ -485,21 +601,10 @@ with tab1:
     st.header("Comprehensive Circle-wise Breakdown")
     bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
 
-    if not today_planned.empty:
-        p_pivot = pd.crosstab(today_planned['Circle'], today_planned['Duration Bucket'])
-        p_pivot = p_pivot.reindex(columns=[c for c in bucket_order if c in p_pivot.columns], fill_value=0)
-        p_pivot['Total'] = p_pivot.sum(axis=1)
-    else:
-        p_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
+    curr_5d_p_tab1 = create_bucket_pivot(df_5day[df_5day['Type of Outage'] == 'Planned Outage'], bucket_order)
+    curr_5d_u_tab1 = create_bucket_pivot(df_5day[df_5day['Type of Outage'] == 'Unplanned Outage'], bucket_order)
 
-    if not fiveday_unplanned.empty:
-        u_pivot = pd.crosstab(fiveday_unplanned['Circle'], fiveday_unplanned['Duration Bucket'])
-        u_pivot = u_pivot.reindex(columns=[c for c in bucket_order if c in u_pivot.columns], fill_value=0)
-        u_pivot['Total'] = u_pivot.sum(axis=1)
-    else:
-        u_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
-
-    combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
+    combined_circle = pd.concat([curr_5d_p_tab1, curr_5d_u_tab1], axis=1, keys=['LAST 5 DAYS (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
 
     st.markdown(" **Click on any row inside the table below** to view the specific Feeder drill-down details.")
 
@@ -564,6 +669,7 @@ with tab1:
                     
                 if not feeder_list_fp.empty:
                     feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
+                    # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
                     feeder_list_fp = feeder_list_fp[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                     styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                     st.dataframe(styled_fp, use_container_width=True, hide_index=True)
@@ -580,6 +686,7 @@ with tab1:
                     
                 if not feeder_list_fu.empty:
                     feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
+                    # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
                     feeder_list_fu = feeder_list_fu[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                     styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                     st.dataframe(styled_fu, use_container_width=True, hide_index=True)
@@ -588,6 +695,7 @@ with tab1:
                     st.dataframe(empty_df.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
     else:
         st.info("No circle data available.")
+        
 
 #  =======================================================================================================================================
 #  =======================================================================================================================================
