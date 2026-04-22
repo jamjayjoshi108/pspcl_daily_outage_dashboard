@@ -3,13 +3,16 @@ import time
 import requests
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+# --- IST TIMEZONE SETUP ---
+# Forces Streamlit to always use Indian Standard Time (UTC +5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 # --- GITHUB TRIGGER LOGIC ---
 def trigger_scraper():
-    # REPLACE THESE TWO LINES WITH YOUR ACTUAL DETAILS
-    repo_owner = "your_github_username"
-    repo_name = "your_repository_name" 
+    repo_owner = "jamjayjoshi108"  # UPDATE THIS
+    repo_name = "pspcl_daily_outage_dashboard"   # UPDATE THIS 
     
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/daily_scrape.yml/dispatches"
     headers = {
@@ -19,12 +22,13 @@ def trigger_scraper():
     requests.post(url, headers=headers, json={"ref": "main"})
 
 # --- DATA LOADING ---
-@st.cache_data(ttl="1m") # Checks for new data every minute
+@st.cache_data(ttl="1m")
 def load_data():
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    # Use the IST timezone to format the date string correctly
+    today_str = datetime.now(IST).strftime("%Y-%m-%d")
     file_today = f"{today_str}_Outages_Today.csv"
     file_5day = f"{today_str}_Outages_Last_5_Days.csv"
-    
+        
     # Check if today's files exist
     if not os.path.exists(file_today) or not os.path.exists(file_5day):
         lock_file = "scraper_lock.txt"
