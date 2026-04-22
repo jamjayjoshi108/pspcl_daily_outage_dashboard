@@ -18,32 +18,37 @@ st.markdown("""
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* Professional Header Styling */
-        h1 {
+        /* Force all standard paragraph, caption, and markdown text to Dark Black */
+        p, span, div, caption, .stMarkdown {
+            color: #000000 !important;
+        }
+
+        /* ----------------------------------------------------
+           UNIFIED HEADERS: ALL USE IDENTICAL PROFESSIONAL BLUE 
+           ---------------------------------------------------- */
+        h1, h2, h3, h4, h5, h6 {
             color: #004085 !important;
             font-weight: 700 !important;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        h1 {
             text-align: center;
-            border-bottom: 3px solid #004085;
+            border-bottom: 3px solid #004085 !important;
             padding-bottom: 10px;
             margin-bottom: 30px !important;
             font-size: 2.2rem !important;
         }
         
-        /* Shrunk Section Headers */
         h2 {
             font-size: 1.3rem !important;
-            color: #112E4C !important;
-            font-weight: 600 !important;
-            margin-bottom: 10px !important;
-            border-bottom: 2px solid #E2E8F0;
+            border-bottom: 2px solid #004085 !important; /* Upgraded from grey to blue */
             padding-bottom: 5px;
+            margin-bottom: 10px !important;
         }
         
-        /* Shrunk Subheaders */
         h3 {
             font-size: 1.05rem !important;
-            color: #4A5568 !important;
-            font-weight: 600 !important;
             margin-bottom: 12px !important;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -52,11 +57,14 @@ st.markdown("""
         /* Crisp Dividers */
         hr {
             border: 0;
-            border-top: 1px solid #CBD5E0;
+            border-top: 1px solid #004085; /* Changed from light grey to blue */
             margin: 1.5rem 0;
+            opacity: 0.3;
         }
 
-        /* Executive KPI Cards with Hover Pop */
+        /* ----------------------------------------------------
+           EXECUTIVE KPI CARDS (Protecting inside text colors)
+           ---------------------------------------------------- */
         .kpi-card {
             background: linear-gradient(135deg, #004481 0%, #0066cc 100%);
             border-radius: 6px;
@@ -75,8 +83,9 @@ st.markdown("""
             box-shadow: 0 8px 16px rgba(0, 68, 129, 0.2);
         }
 
-        .kpi-title {
-            color: #FFC107;
+        /* These must explicitly override the global black text */
+        .kpi-card .kpi-title, .kpi-title {
+            color: #FFC107 !important;
             font-weight: 600;
             font-size: 0.85rem;
             text-transform: uppercase;
@@ -84,16 +93,16 @@ st.markdown("""
             margin-bottom: 0.4rem;
         }
 
-        .kpi-value {
-            color: #FFFFFF;
+        .kpi-card .kpi-value, .kpi-value {
+            color: #FFFFFF !important;
             font-weight: 700;
             font-size: 2.6rem;
             margin-bottom: 0;
             line-height: 1.1;
         }
 
-        .kpi-subtext {
-            color: #F8F9FA;
+        .kpi-card .kpi-subtext, .kpi-subtext {
+            color: #F8F9FA !important;
             font-size: 0.85rem;
             margin-top: 1rem;
             padding-top: 0.6rem;
@@ -103,18 +112,21 @@ st.markdown("""
             gap: 15px;
         }
 
-        /* Clear, High-Contrast Status Badges */
         .status-badge {
             background-color: rgba(0, 0, 0, 0.25);
             padding: 3px 8px;
             border-radius: 4px;
             font-weight: 500;
+            color: #FFFFFF !important;
         }
 
-        /* Solid Table Borders to replace Light Grey */
+        /* ----------------------------------------------------
+           TABLE BORDERS: ENFORCING PROFESSIONAL BLUE
+           ---------------------------------------------------- */
         [data-testid="stDataFrame"] > div {
-            border: 1px solid #004085 !important;
-            border-radius: 4px;
+            border: 2px solid #004085 !important;
+            border-radius: 6px;
+            overflow: hidden;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -201,34 +213,23 @@ def load_data(f_today, f_5day):
 df_today, df_5day = load_data(file_today, file_5day)
 
 # --- NOTORIOUS FEEDERS CALCULATION ---
-# Extract just the date from 'Start Time'
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
-
-# Count unique days with outages per circle and feeder
 feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
-
-# Filter for >= 3 days
 notorious = feeder_days[feeder_days['Days with Outages'] >= 3]
 
-# Get total events AND calculate the average duration in one go
 feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(
     Total_Events=('Start Time', 'size'),
     Avg_Mins=('Diff in mins', 'mean')
 ).reset_index()
 
-# Rename and convert minutes to hours
 feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
 feeder_stats['Average Duration (Hours)'] = (feeder_stats['Avg_Mins'] / 60).round(2)
 feeder_stats = feeder_stats.drop(columns=['Avg_Mins'])
 
-# Merge everything together
 notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder'])
-
-# Sort by worst offenders and take top 5 per circle
 notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
 top_5_notorious = notorious.groupby('Circle').head(5)
 
-# Create a fast-lookup set of tuples (Circle, Feeder) for row highlighting
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
 
 
@@ -283,7 +284,6 @@ with col_left:
 
     st.divider()
 
-    # Zone-wise Table
     st.subheader("Zone-wise Distribution (Today)")
     if not df_today.empty:
         zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
@@ -308,7 +308,6 @@ with col_right:
     st.subheader("Outage Summary (5 Days)")
     kpi3, kpi4 = st.columns(2)
     
-    # NOTE: The hidden kpi-subtext below ensures height alignment with the left column
     with kpi3:
         st.markdown(f'''
             <div class="kpi-card">
@@ -333,7 +332,6 @@ with col_right:
 
     st.divider()
 
-    # Zone-wise Table
     st.subheader("Zone-wise Distribution (5 Days)")
     if not df_5day.empty:
         zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
@@ -354,23 +352,16 @@ st.header("🚨 Notorious Feeders (3+ Days of Outages in Last 5 Days)")
 st.caption("Top 5 worst-performing feeders per circle based on continuous outage days.")
 
 if not top_5_notorious.empty:
-    # Create an alphabetical list of circles that actually have notorious feeders
     circle_options = ["All Circles"] + sorted(top_5_notorious['Circle'].unique().tolist())
+    selected_notorious_circle = st.selectbox("Filter by Circle:", options=circle_options, index=0)
     
-    # Place the dropdown neatly above the table
-    selected_notorious_circle = st.selectbox(
-        "Filter by Circle:",
-        options=circle_options,
-        index=0  # Defaults to showing the full list
-    )
-    
-    # Apply the filter based on the dropdown selection
     if selected_notorious_circle == "All Circles":
         filtered_notorious = top_5_notorious
     else:
         filtered_notorious = top_5_notorious[top_5_notorious['Circle'] == selected_notorious_circle]
         
-    st.dataframe(filtered_notorious, use_container_width=True, hide_index=True)
+    styled_notorious = filtered_notorious.style.format({'Average Duration (Hours)': '{:.2f}'})
+    st.dataframe(styled_notorious, use_container_width=True, hide_index=True)
 else:
     st.info("Excellent! No notorious feeders identified matching this criteria.")
 
@@ -382,7 +373,6 @@ st.divider()
 st.header("Comprehensive Circle-wise Breakdown")
 bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
 
-# 1. Prepare Today Planned Pivot
 if not today_planned.empty:
     p_pivot = pd.crosstab(today_planned['Circle'], today_planned['Duration Bucket'])
     p_pivot = p_pivot.reindex(columns=[c for c in bucket_order if c in p_pivot.columns], fill_value=0)
@@ -390,7 +380,6 @@ if not today_planned.empty:
 else:
     p_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
 
-# 2. Prepare 5-Day Unplanned Pivot
 if not fiveday_unplanned.empty:
     u_pivot = pd.crosstab(fiveday_unplanned['Circle'], fiveday_unplanned['Duration Bucket'])
     u_pivot = u_pivot.reindex(columns=[c for c in bucket_order if c in u_pivot.columns], fill_value=0)
@@ -398,12 +387,10 @@ if not fiveday_unplanned.empty:
 else:
     u_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
 
-# 3. Combine both into a single full-width MultiIndex Table
 combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
 
 st.markdown("👆 **Click on any row inside the table below** to view the specific Feeder drill-down details.")
 
-# The table is now interactive. When you click a row, it triggers an event.
 if not combined_circle.empty:
     selection_event = st.dataframe(
         combined_circle, 
@@ -412,21 +399,17 @@ if not combined_circle.empty:
         selection_mode="single-row" 
     )
 
-    # 4. Unified Feeder Drill-Down Triggered by Table Click
     if len(selection_event.selection.rows) > 0:
-        # Get the selected row index, then map it back to the circle name
         selected_index = selection_event.selection.rows[0]
         selected_circle = combined_circle.index[selected_index]
         
         st.subheader(f"Feeder Details for: {selected_circle}")
         
-        # Highlighting function: Returns a light red background if the feeder is in the notorious set
         def highlight_notorious(row):
             if (selected_circle, row['Feeder']) in notorious_set:
                 return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row)
             return [''] * len(row)
 
-        # --- ROW 1: TODAY ---
         today_left, today_right = st.columns(2)
         
         with today_left:
@@ -445,7 +428,6 @@ if not combined_circle.empty:
             
         st.write("") 
         
-        # --- ROW 2: 5-DAYS ---
         fiveday_left, fiveday_right = st.columns(2)
         
         with fiveday_left:
@@ -454,8 +436,6 @@ if not combined_circle.empty:
             if not feeder_list_fp.empty:
                 feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
                 feeder_list_fp = feeder_list_fp[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
-                
-                # Apply highlight AND format the float column
                 styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'})
                 st.dataframe(styled_fp, use_container_width=True, hide_index=True)
             else:
@@ -467,13 +447,10 @@ if not combined_circle.empty:
             if not feeder_list_fu.empty:
                 feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
                 feeder_list_fu = feeder_list_fu[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
-                
-                # Apply highlight AND format the float column
                 styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'})
                 st.dataframe(styled_fu, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']), use_container_width=True, hide_index=True)
-            
 else:
     st.info("No circle data available.")
 
