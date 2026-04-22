@@ -266,19 +266,19 @@ def generate_yoy_dist(df_curr, df_ly, group_col):
         if col not in c_grp.columns: c_grp[col] = 0
         if col not in l_grp.columns: l_grp[col] = 0
 
-    c_grp['Curr Total'] = c_grp['Planned Outage'] + c_grp['Unplanned Outage']
-    l_grp['LY Total'] = l_grp['Planned Outage'] + l_grp['Unplanned Outage']
+    c_grp['2025 Total'] = c_grp['Planned Outage'] + c_grp['Unplanned Outage']
+    l_grp['2026 Total'] = l_grp['Planned Outage'] + l_grp['Unplanned Outage']
     
-    c_grp = c_grp.rename(columns={'Planned Outage': 'Curr Planned', 'Unplanned Outage': 'Curr Unplanned'})
-    l_grp = l_grp.rename(columns={'Planned Outage': 'LY Planned', 'Unplanned Outage': 'LY Unplanned'})
+    c_grp = c_grp.rename(columns={'Planned Outage': '2025 Planned', 'Unplanned Outage': '2025 Unplanned'})
+    l_grp = l_grp.rename(columns={'Planned Outage': '2026 Planned', 'Unplanned Outage': '2026 Unplanned'})
     
     merged = pd.merge(c_grp, l_grp, on=group_col, how='outer').fillna(0)
     
-    for col in ['Curr Planned', 'Curr Unplanned', 'Curr Total', 'LY Planned', 'LY Unplanned', 'LY Total']:
+    for col in ['2025 Planned', '2025 Unplanned', '2025 Total', '2026 Planned', '2026 Unplanned', '2026 Total']:
         merged[col] = merged[col].astype(int)
         
-    merged['YoY Delta (Total)'] = merged['Curr Total'] - merged['LY Total']
-    return merged[[group_col, 'Curr Planned', 'LY Planned', 'Curr Unplanned', 'LY Unplanned', 'Curr Total', 'LY Total', 'YoY Delta (Total)']]
+    merged['YoY Delta (Total)'] = merged['2025 Total'] - merged['2026 Total']
+    return merged[[group_col, '2025 Planned', '2026 Planned', '2025 Unplanned', '2026 Unplanned', '2025 Total', '2026 Total', 'YoY Delta (Total)']]
 
 def highlight_delta(val):
     if isinstance(val, int):
