@@ -433,8 +433,8 @@ with tab2:
     ly_5d_p = create_bucket_pivot(df_5day_ly[df_5day_ly['Type of Outage'] == 'Planned Outage'], bucket_order)
     ly_5d_u = create_bucket_pivot(df_5day_ly[df_5day_ly['Type of Outage'] == 'Unplanned Outage'], bucket_order)
     
-    comp_p = pd.concat([curr_5d_p, ly_5d_p], axis=1, keys=['Current 5D (Planned)', 'Last Year 5D (Planned)']).fillna(0).astype(int)
-    comp_u = pd.concat([curr_5d_u, ly_5d_u], axis=1, keys=['Current 5D (Unplanned)', 'Last Year 5D (Unplanned)']).fillna(0).astype(int)
+    comp_p = pd.concat([curr_5d_p, ly_5d_p], axis=1, keys=['Current 5 Days (Planned)', 'Last Year 5 Days (Planned)']).fillna(0).astype(int)
+    comp_u = pd.concat([curr_5d_u, ly_5d_u], axis=1, keys=['Current 5 Days (Unplanned)', 'Last Year 5 Days (Unplanned)']).fillna(0).astype(int)
     
     st.markdown("**Planned Outages Summary:**")
     st.dataframe(comp_p.style.set_table_styles(HEADER_STYLES), width="stretch")
