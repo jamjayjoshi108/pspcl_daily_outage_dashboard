@@ -326,13 +326,13 @@ feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(
     Total_Mins=('Diff in mins', 'sum')
 ).reset_index()
 
-feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+feeder_stats.rename(columns={'Total_Events': 'Total Outage Outage Events'}, inplace=True)
 feeder_stats['Total Duration (Hours)'] = (feeder_stats['Total_Mins'] / 60).round(2)
 feeder_stats['Average Duration (Hours)'] = (feeder_stats['Avg_Mins'] / 60).round(2)
 feeder_stats = feeder_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
 
 notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder'])
-notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Outage Events'], ascending=[True, False, False])
 top_5_notorious = notorious.groupby('Circle').head(5)
 
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
@@ -393,7 +393,7 @@ with tab2:
     
     if not df_5day_ly.empty:
         df_5day_ly['Outage Date'] = df_5day_ly['Start Time'].dt.date
-        f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='2025 Days Out')
+        f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='2025 Days with Outages')
         f_stats_ly = df_5day_ly.groupby(['Circle', 'Feeder']).agg(
             LY_Events=('Start Time', 'size'),
             LY_Mins=('Diff in mins', 'sum')
@@ -402,19 +402,19 @@ with tab2:
         ly_noto = pd.merge(f_days_ly, f_stats_ly[['Circle', 'Feeder', 'LY_Events', '2025 Duration (Hrs)']], on=['Circle', 'Feeder'])
         
         noto_yoy = pd.merge(
-            top_5_notorious[['Circle', 'Feeder', 'Days with Outages', 'Total Outage Events', 'Total Duration (Hours)']], 
+            top_5_notorious[['Circle', 'Feeder', 'Days with Outages', 'Total Outage Outage Events', 'Total Duration (Hours)']], 
             ly_noto, on=['Circle', 'Feeder'], how='left'
         ).fillna(0)
         
         noto_yoy = noto_yoy.rename(columns={
-            'Days with Outages': '2026 Days Out',
-            'Total Outage Events': '2026 Events',
+            'Days with Outages': '2026 Days with Outages',
+            'Total Outage Outage Events': '2026 Outage Events',
             'Total Duration (Hours)': '2026 Duration (Hrs)',
-            'LY_Events': '2025 Events'
+            'LY_Events': '2025 Outage Events'
         })
         
-        noto_yoy['2025 Days Out'] = noto_yoy['2025 Days Out'].astype(int)
-        noto_yoy['2025 Events'] = noto_yoy['2025 Events'].astype(int)
+        noto_yoy['2025 Days with Outages'] = noto_yoy['2025 Days with Outages'].astype(int)
+        noto_yoy['2025 Outage Events'] = noto_yoy['2025 Outage Events'].astype(int)
         
         st.dataframe(noto_yoy.style.format({
             '2026 Duration (Hrs)': '{:.2f}', 
@@ -586,13 +586,13 @@ with tab1:
                 Total_Mins=('Diff in mins', 'sum')
             ).reset_index()
 
-            dyn_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+            dyn_stats.rename(columns={'Total_Events': 'Total Outage Outage Events'}, inplace=True)
             dyn_stats['Total Duration (Hours)'] = (dyn_stats['Total_Mins'] / 60).round(2)
             dyn_stats['Average Duration (Hours)'] = (dyn_stats['Avg_Mins'] / 60).round(2)
             dyn_stats = dyn_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
 
             dyn_noto = dyn_noto.merge(dyn_stats, on=['Circle', 'Feeder'])
-            dyn_noto = dyn_noto.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+            dyn_noto = dyn_noto.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Outage Events'], ascending=[True, False, False])
             dyn_top5 = dyn_noto.groupby('Circle').head(5)
 
             if selected_notorious_circle != "All Circles":
@@ -959,13 +959,13 @@ with tab1:
 #     Total_Mins=('Diff in mins', 'sum')
 # ).reset_index()
 
-# feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+# feeder_stats.rename(columns={'Total_Events': 'Total Outage Outage Events'}, inplace=True)
 # feeder_stats['Total Duration (Hours)'] = (feeder_stats['Total_Mins'] / 60).round(2)
 # feeder_stats['Average Duration (Hours)'] = (feeder_stats['Avg_Mins'] / 60).round(2)
 # feeder_stats = feeder_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
 
 # notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder'])
-# notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+# notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Outage Events'], ascending=[True, False, False])
 # top_5_notorious = notorious.groupby('Circle').head(5)
 
 # notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
@@ -1116,13 +1116,13 @@ with tab1:
 #             Total_Mins=('Diff in mins', 'sum')
 #         ).reset_index()
 
-#         dyn_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+#         dyn_stats.rename(columns={'Total_Events': 'Total Outage Outage Events'}, inplace=True)
 #         dyn_stats['Total Duration (Hours)'] = (dyn_stats['Total_Mins'] / 60).round(2)
 #         dyn_stats['Average Duration (Hours)'] = (dyn_stats['Avg_Mins'] / 60).round(2)
 #         dyn_stats = dyn_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
 
 #         dyn_noto = dyn_noto.merge(dyn_stats, on=['Circle', 'Feeder'])
-#         dyn_noto = dyn_noto.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+#         dyn_noto = dyn_noto.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Outage Events'], ascending=[True, False, False])
 #         dyn_top5 = dyn_noto.groupby('Circle').head(5)
 
 #         if selected_notorious_circle != "All Circles":
@@ -1502,12 +1502,12 @@ with tab1:
 #     Avg_Mins=('Diff in mins', 'mean')
 # ).reset_index()
 
-# feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+# feeder_stats.rename(columns={'Total_Events': 'Total Outage Outage Events'}, inplace=True)
 # feeder_stats['Average Duration (Hours)'] = (feeder_stats['Avg_Mins'] / 60).round(2)
 # feeder_stats = feeder_stats.drop(columns=['Avg_Mins'])
 
 # notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder'])
-# notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+# notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Outage Events'], ascending=[True, False, False])
 # top_5_notorious = notorious.groupby('Circle').head(5)
 
 # notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
