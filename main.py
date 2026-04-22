@@ -134,7 +134,12 @@ def load_data(f_today, f_5day):
     for df in [df_today, df_5day]:
         for col in time_cols:
             df[col] = pd.to_datetime(df[col], errors='coerce')
-        df['Status_Calc'] = df['End Time'].apply(lambda x: 'Active' if pd.isna(x) else 'Closed')
+            
+        # NEW LOGIC: Use the actual 'Status' column
+        # Maps 'Open' to 'Active'. 'Closed' and 'Cancelled' will both become 'Closed'.
+        df['Status_Calc'] = df['Status'].apply(
+            lambda x: 'Active' if str(x).strip().title() == 'Open' else 'Closed'
+        )
         
         def assign_bucket(mins):
             if pd.isna(mins) or mins < 0: return "Active/Unknown"
