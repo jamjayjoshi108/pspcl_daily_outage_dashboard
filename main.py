@@ -388,42 +388,42 @@ with tab2:
     
     st.divider()
 
-    st.subheader("🚨 Current Top Notorious Feeders vs. Last Year")
-    st.markdown("Displays the current top notorious feeders and shows their historical performance exactly a year ago.")
+    # st.subheader("🚨 Current Top Notorious Feeders vs. Last Year")
+    # st.markdown("Displays the current top notorious feeders and shows their historical performance exactly a year ago.")
     
-    if not df_5day_ly.empty:
-        df_5day_ly['Outage Date'] = df_5day_ly['Start Time'].dt.date
-        f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='2025 Days with Outages')
-        f_stats_ly = df_5day_ly.groupby(['Circle', 'Feeder']).agg(
-            LY_Events=('Start Time', 'size'),
-            LY_Mins=('Diff in mins', 'sum')
-        ).reset_index()
-        f_stats_ly['2025 Duration (Hrs)'] = (f_stats_ly['LY_Mins'] / 60).round(2)
-        ly_noto = pd.merge(f_days_ly, f_stats_ly[['Circle', 'Feeder', 'LY_Events', '2025 Duration (Hrs)']], on=['Circle', 'Feeder'])
+    # if not df_5day_ly.empty:
+    #     df_5day_ly['Outage Date'] = df_5day_ly['Start Time'].dt.date
+    #     f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='2025 Days with Outages')
+    #     f_stats_ly = df_5day_ly.groupby(['Circle', 'Feeder']).agg(
+    #         LY_Events=('Start Time', 'size'),
+    #         LY_Mins=('Diff in mins', 'sum')
+    #     ).reset_index()
+    #     f_stats_ly['2025 Duration (Hrs)'] = (f_stats_ly['LY_Mins'] / 60).round(2)
+    #     ly_noto = pd.merge(f_days_ly, f_stats_ly[['Circle', 'Feeder', 'LY_Events', '2025 Duration (Hrs)']], on=['Circle', 'Feeder'])
         
-        noto_yoy = pd.merge(
-            top_5_notorious[['Circle', 'Feeder', 'Days with Outages', 'Total Outage Outage Events', 'Total Duration (Hours)']], 
-            ly_noto, on=['Circle', 'Feeder'], how='left'
-        ).fillna(0)
+    #     noto_yoy = pd.merge(
+    #         top_5_notorious[['Circle', 'Feeder', 'Days with Outages', 'Total Outage Outage Events', 'Total Duration (Hours)']], 
+    #         ly_noto, on=['Circle', 'Feeder'], how='left'
+    #     ).fillna(0)
         
-        noto_yoy = noto_yoy.rename(columns={
-            'Days with Outages': '2026 Days with Outages',
-            'Total Outage Outage Events': '2026 Outage Events',
-            'Total Duration (Hours)': '2026 Duration (Hrs)',
-            'LY_Events': '2025 Outage Events'
-        })
+    #     noto_yoy = noto_yoy.rename(columns={
+    #         'Days with Outages': '2026 Days with Outages',
+    #         'Total Outage Outage Events': '2026 Outage Events',
+    #         'Total Duration (Hours)': '2026 Duration (Hrs)',
+    #         'LY_Events': '2025 Outage Events'
+    #     })
         
-        noto_yoy['2025 Days with Outages'] = noto_yoy['2025 Days with Outages'].astype(int)
-        noto_yoy['2025 Outage Events'] = noto_yoy['2025 Outage Events'].astype(int)
+    #     noto_yoy['2025 Days with Outages'] = noto_yoy['2025 Days with Outages'].astype(int)
+    #     noto_yoy['2025 Outage Events'] = noto_yoy['2025 Outage Events'].astype(int)
         
-        st.dataframe(noto_yoy.style.format({
-            '2026 Duration (Hrs)': '{:.2f}', 
-            '2025 Duration (Hrs)': '{:.2f}'
-        }).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-    else:
-        st.info("No Notorious Feeder data available to map against Last Year.")
+    #     st.dataframe(noto_yoy.style.format({
+    #         '2026 Duration (Hrs)': '{:.2f}', 
+    #         '2025 Duration (Hrs)': '{:.2f}'
+    #     }).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+    # else:
+    #     st.info("No Notorious Feeder data available to map against Last Year.")
 
-    st.divider()
+    # st.divider()
 
     st.subheader("4. Comprehensive Circle-wise Breakdown YoY (Last 5 Days)")
     bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
