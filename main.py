@@ -203,16 +203,31 @@ df_today, df_5day = load_data(file_today, file_5day)
 # --- NOTORIOUS FEEDERS CALCULATION ---
 # Extract just the date from 'Start Time'
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
+
 # Count unique days with outages per circle and feeder
 feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
+
 # Filter for >= 3 days
 notorious = feeder_days[feeder_days['Days with Outages'] >= 3]
-# Count total outage events to help rank the top 5
-feeder_totals = df_5day.groupby(['Circle', 'Feeder']).size().reset_index(name='Total Outage Events')
-notorious = notorious.merge(feeder_totals, on=['Circle', 'Feeder'])
+
+# Get total events AND calculate the average duration in one go
+feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(
+    Total_Events=('Start Time', 'size'),
+    Avg_Mins=('Diff in mins', 'mean')
+).reset_index()
+
+# Rename and convert minutes to hours
+feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+feeder_stats['Average Duration (Hours)'] = (feeder_stats['Avg_Mins'] / 60).round(2)
+feeder_stats = feeder_stats.drop(columns=['Avg_Mins'])
+
+# Merge everything together
+notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder'])
+
 # Sort by worst offenders and take top 5 per circle
 notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
 top_5_notorious = notorious.groupby('Circle').head(5)
+
 # Create a fast-lookup set of tuples (Circle, Feeder) for row highlighting
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
 
@@ -339,7 +354,23 @@ st.header("🚨 Notorious Feeders (3+ Days of Outages in Last 5 Days)")
 st.caption("Top 5 worst-performing feeders per circle based on continuous outage days.")
 
 if not top_5_notorious.empty:
-    st.dataframe(top_5_notorious, use_container_width=True, hide_index=True)
+    # Create an alphabetical list of circles that actually have notorious feeders
+    circle_options = ["All Circles"] + sorted(top_5_notorious['Circle'].unique().tolist())
+    
+    # Place the dropdown neatly above the table
+    selected_notorious_circle = st.selectbox(
+        "Filter by Circle:",
+        options=circle_options,
+        index=0  # Defaults to showing the full list
+    )
+    
+    # Apply the filter based on the dropdown selection
+    if selected_notorious_circle == "All Circles":
+        filtered_notorious = top_5_notorious
+    else:
+        filtered_notorious = top_5_notorious[top_5_notorious['Circle'] == selected_notorious_circle]
+        
+    st.dataframe(filtered_notorious, use_container_width=True, hide_index=True)
 else:
     st.info("Excellent! No notorious feeders identified matching this criteria.")
 
