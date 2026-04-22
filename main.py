@@ -392,22 +392,25 @@ else:
 
 combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
 
+st.markdown("👆 **Click on any row inside the table below** to view the specific Feeder drill-down details.")
 
 if not combined_circle.empty:
-    # Use st.table() instead of st.dataframe() to force the Blue/Yellow headers
+    # Apply header styling to the main interactive dataframe
     styled_combined = combined_circle.style.set_table_styles(HEADER_STYLES)
-    st.table(styled_combined)
-
-    st.divider()
-    st.header("🔍 Feeder Drill-Down")
     
-    # Replaced row-click with a robust dropdown for the presentation
-    selected_circle = st.selectbox(
-        "Select a Circle to view specific Feeder details:", 
-        options=combined_circle.index.tolist()
+    selection_event = st.dataframe(
+        styled_combined, 
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row" 
     )
 
-    if selected_circle:
+    if len(selection_event.selection.rows) > 0:
+        selected_index = selection_event.selection.rows[0]
+        selected_circle = combined_circle.index[selected_index]
+        
+        st.subheader(f"Feeder Details for: {selected_circle}")
+        
         def highlight_notorious(row):
             if (selected_circle, row['Feeder']) in notorious_set:
                 return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row)
@@ -419,16 +422,15 @@ if not combined_circle.empty:
             st.markdown(f"**🔴 TODAY: Planned Outages**")
             feeder_list_tp = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
             feeder_list_tp = feeder_list_tp.rename(columns={'Status_Calc': 'Status'})
-            # Changed to st.table to maintain matching headers
             styled_tp = feeder_list_tp.style.apply(highlight_notorious, axis=1).set_table_styles(HEADER_STYLES)
-            st.table(styled_tp)
+            st.dataframe(styled_tp, use_container_width=True, hide_index=True)
             
         with today_right:
             st.markdown(f"**🔴 TODAY: Unplanned Outages**")
             feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
             feeder_list_tu = feeder_list_tu.rename(columns={'Status_Calc': 'Status'})
             styled_tu = feeder_list_tu.style.apply(highlight_notorious, axis=1).set_table_styles(HEADER_STYLES)
-            st.table(styled_tu)
+            st.dataframe(styled_tu, use_container_width=True, hide_index=True)
             
         st.write("") 
         
@@ -441,10 +443,10 @@ if not combined_circle.empty:
                 feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
                 feeder_list_fp = feeder_list_fp[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                 styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
-                st.table(styled_fp)
+                st.dataframe(styled_fp, use_container_width=True, hide_index=True)
             else:
                 empty_df = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
-                st.table(empty_df.style.set_table_styles(HEADER_STYLES))
+                st.dataframe(empty_df.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
             
         with fiveday_right:
             st.markdown(f"**🟢 5-DAYS: Unplanned Outages**")
@@ -453,10 +455,10 @@ if not combined_circle.empty:
                 feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
                 feeder_list_fu = feeder_list_fu[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                 styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
-                st.table(styled_fu)
+                st.dataframe(styled_fu, use_container_width=True, hide_index=True)
             else:
                 empty_df = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
-                st.table(empty_df.style.set_table_styles(HEADER_STYLES))
+                st.dataframe(empty_df.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
 else:
     st.info("No circle data available.")
 
