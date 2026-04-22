@@ -8,67 +8,158 @@ from datetime import datetime, timedelta, timezone
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
 
-# --- COLOR THEME & CUSTOM CSS ---
-COLOR_PRIMARY_BLUE = "#004085"
-COLOR_KPI_TITLE_GOLD = "#FFC107"
-COLOR_KPI_VALUE_WHITE = "#FFFFFF"
-COLOR_TEXT_DARK = "#112E4C"
-
-st.markdown(f"""
+# --- COLOR THEME & CUSTOM CSS (ANIMATED & DYNAMIC) ---
+st.markdown("""
     <style>
-        .block-container {{
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-        }}
-        /* Headers styling */
-        h1, h2, h3, h4, h5, h6 {{
-            color: {COLOR_TEXT_DARK};
-            border-bottom: 2px solid {COLOR_PRIMARY_BLUE};
-            padding-bottom: 5px;
-            margin-bottom: 15px;
-        }}
-        /* Custom blue dividers */
-        hr {{
+        /* Base Container Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Continuous Gradient Backgrounds */
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        /* Alert Pulsing */
+        @keyframes pulseAlert {
+            0% { text-shadow: 0 0 5px #ff4757; transform: scale(1); }
+            50% { text-shadow: 0 0 20px #ff4757, 0 0 30px #ff4757; transform: scale(1.05); }
+            100% { text-shadow: 0 0 5px #ff4757; transform: scale(1); }
+        }
+
+        .block-container {
+            padding-top: 1.5rem;
+            padding-bottom: 1.5rem;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        /* Animated Gradient Headers */
+        h1 {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4, #45B7D1, #FFBE0B, #FF6B6B);
+            background-size: 300% 300%;
+            animation: gradientShift 8s ease infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800 !important;
+            border-bottom: none !important;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        h2, h3 {
+            color: #112E4C;
+            border-bottom: 3px transparent;
+            border-image: linear-gradient(to right, #4ECDC4, #45B7D1) 1;
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        /* Dynamic Animated Dividers */
+        hr {
             border: 0;
-            border-top: 2px solid {COLOR_PRIMARY_BLUE};
-            margin: 1rem 0;
-        }}
-        /* KPI Card Styles matching your image */
-        .kpi-card {{
-            background-color: {COLOR_PRIMARY_BLUE};
-            border-radius: 5px;
-            padding: 1.5rem 1rem;
+            height: 3px;
+            background: linear-gradient(90deg, rgba(78,205,196,0) 0%, rgba(69,183,209,1) 50%, rgba(78,205,196,0) 100%);
+            background-size: 200% 100%;
+            animation: gradientShift 4s ease infinite;
+            margin: 2rem 0;
+        }
+
+        /* State-of-the-Art KPI Cards */
+        .kpi-card {
+            background: linear-gradient(135deg, #1A2980 0%, #26D0CE 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 6s ease infinite, fadeIn 0.6s ease-out;
+            border-radius: 12px;
+            padding: 1.8rem 1.2rem;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             height: 100%;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-        }}
-        .kpi-title {{
-            color: {COLOR_KPI_TITLE_GOLD};
-            font-weight: bold;
-            font-size: 0.9rem;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Glassmorphism Shine Effect on Hover */
+        .kpi-card::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 50%; height: 100%;
+            background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 100%);
+            transform: skewX(-25deg);
+            transition: 0.6s;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 15px 25px rgba(38, 208, 206, 0.4);
+        }
+
+        .kpi-card:hover::after {
+            left: 150%;
+        }
+
+        .kpi-title {
+            color: #FFD700;
+            font-weight: 800;
+            font-size: 1rem;
             text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }}
-        .kpi-value {{
-            color: {COLOR_KPI_VALUE_WHITE};
-            font-weight: bold;
-            font-size: 2.5rem;
+            letter-spacing: 1px;
+            margin-bottom: 0.8rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .kpi-value {
+            color: #FFFFFF;
+            font-weight: 900;
+            font-size: 3.5rem;
             margin-bottom: 0;
-            line-height: 1.2;
-        }}
-        .kpi-subtext {{
-            color: {COLOR_KPI_VALUE_WHITE};
-            font-size: 0.85rem;
-            margin-top: 0.8rem;
-            padding-top: 0.5rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-        }}
-        /* White background for tables */
-        .stDataFrame {{
+            line-height: 1.1;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+        }
+
+        .kpi-subtext {
+            color: #E0E0E0;
+            font-size: 0.95rem;
+            margin-top: 1.2rem;
+            padding-top: 0.8rem;
+            border-top: 1px dashed rgba(255, 255, 255, 0.3);
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            font-weight: 600;
+        }
+
+        .pulse-active {
+            color: #ff4757;
+            animation: pulseAlert 2s infinite;
+            display: inline-block;
+        }
+
+        .glow-closed {
+            color: #2ed573;
+            text-shadow: 0 0 5px rgba(46, 213, 115, 0.5);
+        }
+
+        /* Upgraded Dataframe Container Styling */
+        .stDataFrame {
             background-color: white;
-        }}
+            border-radius: 10px;
+            padding: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: box-shadow 0.3s ease;
+        }
+        .stDataFrame:hover {
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -180,7 +271,10 @@ with col_left:
             <div class="kpi-card">
                 <div class="kpi-title">Total Planned Outages</div>
                 <div class="kpi-value">{len(today_planned)}</div>
-                <div class="kpi-subtext">🔴 Active: {active_p} &nbsp;|&nbsp; 🟢 Closed: {closed_p}</div>
+                <div class="kpi-subtext">
+                    <span class="pulse-active">🔴 Active: {active_p}</span> | 
+                    <span class="glow-closed">🟢 Closed: {closed_p}</span>
+                </div>
             </div>
         ''', unsafe_allow_html=True)
         
@@ -191,7 +285,10 @@ with col_left:
             <div class="kpi-card">
                 <div class="kpi-title">Total Unplanned Outages</div>
                 <div class="kpi-value">{len(today_unplanned)}</div>
-                <div class="kpi-subtext">🔴 Active: {active_u} &nbsp;|&nbsp; 🟢 Closed: {closed_u}</div>
+                <div class="kpi-subtext">
+                    <span class="pulse-active">🔴 Active: {active_u}</span> | 
+                    <span class="glow-closed">🟢 Closed: {closed_u}</span>
+                </div>
             </div>
         ''', unsafe_allow_html=True)
 
@@ -340,3 +437,347 @@ if not combined_circle.empty:
             st.dataframe(feeder_list_fu, use_container_width=True, hide_index=True)
 else:
     st.info("No circle data available.")
+    
+# =======================================================================================================================================
+# import os
+# import time
+# import requests
+# import streamlit as st
+# import pandas as pd
+# from datetime import datetime, timedelta, timezone
+
+# # --- PAGE CONFIGURATION ---
+# st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
+
+# # --- COLOR THEME & CUSTOM CSS ---
+# COLOR_PRIMARY_BLUE = "#004085"
+# COLOR_KPI_TITLE_GOLD = "#FFC107"
+# COLOR_KPI_VALUE_WHITE = "#FFFFFF"
+# COLOR_TEXT_DARK = "#112E4C"
+
+# st.markdown(f"""
+#     <style>
+#         .block-container {{
+#             padding-top: 1rem;
+#             padding-bottom: 1rem;
+#         }}
+#         /* Headers styling */
+#         h1, h2, h3, h4, h5, h6 {{
+#             color: {COLOR_TEXT_DARK};
+#             border-bottom: 2px solid {COLOR_PRIMARY_BLUE};
+#             padding-bottom: 5px;
+#             margin-bottom: 15px;
+#         }}
+#         /* Custom blue dividers */
+#         hr {{
+#             border: 0;
+#             border-top: 2px solid {COLOR_PRIMARY_BLUE};
+#             margin: 1rem 0;
+#         }}
+#         /* KPI Card Styles matching your image */
+#         .kpi-card {{
+#             background-color: {COLOR_PRIMARY_BLUE};
+#             border-radius: 5px;
+#             padding: 1.5rem 1rem;
+#             display: flex;
+#             flex-direction: column;
+#             justify-content: space-between;
+#             height: 100%;
+#             box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+#         }}
+#         .kpi-title {{
+#             color: {COLOR_KPI_TITLE_GOLD};
+#             font-weight: bold;
+#             font-size: 0.9rem;
+#             text-transform: uppercase;
+#             margin-bottom: 0.5rem;
+#         }}
+#         .kpi-value {{
+#             color: {COLOR_KPI_VALUE_WHITE};
+#             font-weight: bold;
+#             font-size: 2.5rem;
+#             margin-bottom: 0;
+#             line-height: 1.2;
+#         }}
+#         .kpi-subtext {{
+#             color: {COLOR_KPI_VALUE_WHITE};
+#             font-size: 0.85rem;
+#             margin-top: 0.8rem;
+#             padding-top: 0.5rem;
+#             border-top: 1px solid rgba(255, 255, 255, 0.2);
+#         }}
+#         /* White background for tables */
+#         .stDataFrame {{
+#             background-color: white;
+#         }}
+#     </style>
+# """, unsafe_allow_html=True)
+
+# # --- IST TIMEZONE SETUP ---
+# IST = timezone(timedelta(hours=5, minutes=30))
+
+# # --- GITHUB TRIGGER LOGIC ---
+# def trigger_scraper():
+#     repo_owner = "jamjayjoshi108"
+#     repo_name = "pspcl_daily_outage_dashboard" 
+    
+#     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/daily_scrape.yml/dispatches"
+#     headers = {
+#         "Accept": "application/vnd.github.v3+json",
+#         "Authorization": f"token {st.secrets['GITHUB_TOKEN']}"
+#     }
+#     response = requests.post(url, headers=headers, json={"ref": "main"})
+    
+#     if response.status_code == 204:
+#         st.toast("✅ Scraper triggered successfully in the cloud!")
+#         return True
+#     else:
+#         st.error(f"❌ Failed to trigger scraper. GitHub responded: {response.text}")
+#         return False
+
+# # --- 1. FILE CHECKING LOGIC ---
+# today_str = datetime.now(IST).strftime("%Y-%m-%d")
+# file_today = f"{today_str}_Outages_Today.csv"
+# file_5day = f"{today_str}_Outages_Last_5_Days.csv"
+
+# if not os.path.exists(file_today) or not os.path.exists(file_5day):
+#     lock_file = "scraper_lock.txt"
+#     should_trigger = True
+    
+#     if os.path.exists(lock_file):
+#         if time.time() - os.path.getmtime(lock_file) < 300: 
+#             should_trigger = False
+            
+#     if should_trigger:
+#         success = trigger_scraper()
+#         if success:
+#             with open(lock_file, "w") as f:
+#                 f.write(str(time.time()))
+#             st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
+#             st.info("⏳ Please wait ~2 minutes and refresh this page.")
+#         else:
+#             st.error("🚨 Could not fetch data due to GitHub API error. Fix the token to continue.")
+#     else:
+#         st.info("⏳ The scraper is currently running in the background. Please wait a moment and refresh.")
+        
+#     st.stop()
+
+# # --- 2. DATA LOADING LOGIC ---
+# @st.cache_data(ttl="10m")
+# def load_data(f_today, f_5day):
+#     df_today = pd.read_csv(f_today)
+#     df_5day = pd.read_csv(f_5day)
+    
+#     df_today['Type of Outage'] = df_today['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
+#     df_5day['Type of Outage'] = df_5day['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
+    
+#     time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
+#     for df in [df_today, df_5day]:
+#         for col in time_cols:
+#             df[col] = pd.to_datetime(df[col], errors='coerce')
+            
+#         # NEW LOGIC: Use the actual 'Status' column
+#         # Maps 'Open' to 'Active'. 'Closed' and 'Cancelled' will both become 'Closed'.
+#         df['Status_Calc'] = df['Status'].apply(
+#             lambda x: 'Active' if str(x).strip().title() == 'Open' else 'Closed'
+#         )
+        
+#         def assign_bucket(mins):
+#             if pd.isna(mins) or mins < 0: return "Active/Unknown"
+#             hrs = mins / 60
+#             if hrs <= 2: return "Up to 2 Hrs"
+#             elif hrs <= 4: return "2-4 Hrs"
+#             elif hrs <= 8: return "4-8 Hrs"
+#             else: return "Above 8 Hrs"
+            
+#         df['Duration Bucket'] = df['Diff in mins'].apply(assign_bucket)
+        
+#     return df_today, df_5day
+
+# df_today, df_5day = load_data(file_today, file_5day)
+
+# st.title("⚡ Power Outage Monitoring Dashboard")
+
+# # --- TOP HALF: SPLIT VIEW ---
+# col_left, col_right = st.columns(2, gap="large")
+
+# # ==========================================
+# # LEFT PAGE: TODAY'S OUTAGES
+# # ==========================================
+# with col_left:
+#     st.header(f"📅 Today's Outages ({datetime.now(IST).strftime('%d %b %Y')})")
+    
+#     today_planned = df_today[df_today['Type of Outage'] == 'Planned Outage']
+#     today_unplanned = df_today[df_today['Type of Outage'] == 'Unplanned Outage']
+    
+#     # Styled KPIs with Active/Closed Subtext
+#     st.subheader("Outage Summary")
+#     kpi1, kpi2 = st.columns(2)
+    
+#     with kpi1:
+#         active_p = len(today_planned[today_planned['Status_Calc'] == 'Active'])
+#         closed_p = len(today_planned[today_planned['Status_Calc'] == 'Closed'])
+#         st.markdown(f'''
+#             <div class="kpi-card">
+#                 <div class="kpi-title">Total Planned Outages</div>
+#                 <div class="kpi-value">{len(today_planned)}</div>
+#                 <div class="kpi-subtext">🔴 Active: {active_p} &nbsp;|&nbsp; 🟢 Closed: {closed_p}</div>
+#             </div>
+#         ''', unsafe_allow_html=True)
+        
+#     with kpi2:
+#         active_u = len(today_unplanned[today_unplanned['Status_Calc'] == 'Active'])
+#         closed_u = len(today_unplanned[today_unplanned['Status_Calc'] == 'Closed'])
+#         st.markdown(f'''
+#             <div class="kpi-card">
+#                 <div class="kpi-title">Total Unplanned Outages</div>
+#                 <div class="kpi-value">{len(today_unplanned)}</div>
+#                 <div class="kpi-subtext">🔴 Active: {active_u} &nbsp;|&nbsp; 🟢 Closed: {closed_u}</div>
+#             </div>
+#         ''', unsafe_allow_html=True)
+
+#     st.divider()
+
+#     # Zone-wise Table
+#     st.subheader("Zone-wise Distribution (Today)")
+#     if not df_today.empty:
+#         zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+#         if 'Planned Outage' not in zone_today: zone_today['Planned Outage'] = 0
+#         if 'Unplanned Outage' not in zone_today: zone_today['Unplanned Outage'] = 0
+#         zone_today['Total'] = zone_today['Planned Outage'] + zone_today['Unplanned Outage']
+        
+#         st.dataframe(zone_today, use_container_width=True, hide_index=True)
+#     else:
+#         st.info("No data available for today.")
+
+
+# # ==========================================
+# # RIGHT PAGE: LAST 5 DAYS
+# # ==========================================
+# with col_right:
+#     st.header("⏳ Last 5 Days Trends")
+    
+#     fiveday_planned = df_5day[df_5day['Type of Outage'] == 'Planned Outage']
+#     fiveday_unplanned = df_5day[df_5day['Type of Outage'] == 'Unplanned Outage']
+    
+#     # Styled KPIs WITHOUT Active/Closed Subtext
+#     st.subheader("Outage Summary (5 Days)")
+#     kpi3, kpi4 = st.columns(2)
+    
+#     with kpi3:
+#         st.markdown(f'''
+#             <div class="kpi-card">
+#                 <div class="kpi-title">Total Planned Outages</div>
+#                 <div class="kpi-value">{len(fiveday_planned)}</div>
+#             </div>
+#         ''', unsafe_allow_html=True)
+        
+#     with kpi4:
+#         st.markdown(f'''
+#             <div class="kpi-card">
+#                 <div class="kpi-title">Total Unplanned Outages</div>
+#                 <div class="kpi-value">{len(fiveday_unplanned)}</div>
+#             </div>
+#         ''', unsafe_allow_html=True)
+
+#     st.divider()
+
+#     # Zone-wise Table
+#     st.subheader("Zone-wise Distribution (5 Days)")
+#     if not df_5day.empty:
+#         zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+#         if 'Planned Outage' not in zone_5day: zone_5day['Planned Outage'] = 0
+#         if 'Unplanned Outage' not in zone_5day: zone_5day['Unplanned Outage'] = 0
+#         zone_5day['Total'] = zone_5day['Planned Outage'] + zone_5day['Unplanned Outage']
+        
+#         st.dataframe(zone_5day, use_container_width=True, hide_index=True)
+#     else:
+#         st.info("No data available for the last 5 days.")
+
+
+# # ==========================================
+# # BOTTOM HALF: FULL-WIDTH COMBINED SECTION
+# # ==========================================
+# st.divider()
+# st.header("Comprehensive Circle-wise Breakdown")
+# bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
+
+# # 1. Prepare Today Planned Pivot
+# if not today_planned.empty:
+#     p_pivot = pd.crosstab(today_planned['Circle'], today_planned['Duration Bucket'])
+#     p_pivot = p_pivot.reindex(columns=[c for c in bucket_order if c in p_pivot.columns], fill_value=0)
+#     p_pivot['Total'] = p_pivot.sum(axis=1)
+# else:
+#     p_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
+
+# # 2. Prepare 5-Day Unplanned Pivot
+# if not fiveday_unplanned.empty:
+#     u_pivot = pd.crosstab(fiveday_unplanned['Circle'], fiveday_unplanned['Duration Bucket'])
+#     u_pivot = u_pivot.reindex(columns=[c for c in bucket_order if c in u_pivot.columns], fill_value=0)
+#     u_pivot['Total'] = u_pivot.sum(axis=1)
+# else:
+#     u_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
+
+# # 3. Combine both into a single full-width MultiIndex Table
+# combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
+
+# st.markdown("👆 **Click on any row inside the table below** to view the specific Feeder drill-down details.")
+
+# # The table is now interactive. When you click a row, it triggers an event.
+# if not combined_circle.empty:
+#     selection_event = st.dataframe(
+#         combined_circle, 
+#         use_container_width=True,
+#         on_select="rerun",
+#         selection_mode="single-row"  # Changed from single_row to single-row
+#     )
+
+#     # 4. Unified Feeder Drill-Down Triggered by Table Click
+#     if len(selection_event.selection.rows) > 0:
+#         # Get the selected row index, then map it back to the circle name
+#         selected_index = selection_event.selection.rows[0]
+#         selected_circle = combined_circle.index[selected_index]
+        
+#         st.subheader(f"Feeder Details for: {selected_circle}")
+        
+#         # --- ROW 1: TODAY ---
+#         today_left, today_right = st.columns(2)
+        
+#         with today_left:
+#             st.markdown(f"**🔴 TODAY: Planned Outages**")
+#             feeder_list_tp = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
+#             feeder_list_tp = feeder_list_tp.rename(columns={'Status_Calc': 'Status'})
+#             st.dataframe(feeder_list_tp, use_container_width=True, hide_index=True)
+            
+#         with today_right:
+#             st.markdown(f"**🔴 TODAY: Unplanned Outages**")
+#             feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
+#             feeder_list_tu = feeder_list_tu.rename(columns={'Status_Calc': 'Status'})
+#             st.dataframe(feeder_list_tu, use_container_width=True, hide_index=True)
+            
+#         st.write("") # Adds a tiny bit of vertical spacing
+        
+#         # --- ROW 2: 5-DAYS ---
+#         fiveday_left, fiveday_right = st.columns(2)
+        
+#         with fiveday_left:
+#             st.markdown(f"**🟢 5-DAYS: Planned Outages**")
+#             feeder_list_fp = fiveday_planned[fiveday_planned['Circle'] == selected_circle].copy()
+#             if not feeder_list_fp.empty:
+#                 feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
+#                 feeder_list_fp = feeder_list_fp[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
+#             else:
+#                 feeder_list_fp = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+#             st.dataframe(feeder_list_fp, use_container_width=True, hide_index=True)
+            
+#         with fiveday_right:
+#             st.markdown(f"**🟢 5-DAYS: Unplanned Outages**")
+#             feeder_list_fu = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_circle].copy()
+#             if not feeder_list_fu.empty:
+#                 feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
+#                 feeder_list_fu = feeder_list_fu[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
+#             else:
+#                 feeder_list_fu = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+#             st.dataframe(feeder_list_fu, use_container_width=True, hide_index=True)
+# else:
+#     st.info("No circle data available.")
