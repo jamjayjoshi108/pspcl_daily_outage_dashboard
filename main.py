@@ -293,21 +293,45 @@ if not combined_circle.empty:
         selected_circle = combined_circle.index[selected_index]
         
         st.subheader(f"Feeder Details for: {selected_circle}")
-        drill_left, drill_right = st.columns(2)
         
-        with drill_left:
-            st.markdown(f"**🔴 TODAY: Planned Feeders**")
-            feeder_list_p = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
-            # Rename for display
-            feeder_list_p = feeder_list_p.rename(columns={'Status_Calc': 'Status'})
-            st.dataframe(feeder_list_p, use_container_width=True, hide_index=True)
+        # --- ROW 1: TODAY ---
+        today_left, today_right = st.columns(2)
+        
+        with today_left:
+            st.markdown(f"**🔴 TODAY: Planned Outages**")
+            feeder_list_tp = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
+            feeder_list_tp = feeder_list_tp.rename(columns={'Status_Calc': 'Status'})
+            st.dataframe(feeder_list_tp, use_container_width=True, hide_index=True)
             
-        with drill_right:
-            st.markdown(f"**🟢 5-DAYS: Unplanned Feeders**")
-            feeder_list_u = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_circle].copy()
-            # Calculate Hours and format columns
-            feeder_list_u['Diff in Hours'] = (feeder_list_u['Diff in mins'] / 60).round(2)
-            feeder_list_u = feeder_list_u[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
-            st.dataframe(feeder_list_u, use_container_width=True, hide_index=True)
+        with today_right:
+            st.markdown(f"**🔴 TODAY: Unplanned Outages**")
+            feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
+            feeder_list_tu = feeder_list_tu.rename(columns={'Status_Calc': 'Status'})
+            st.dataframe(feeder_list_tu, use_container_width=True, hide_index=True)
+            
+        st.write("") # Adds a tiny bit of vertical spacing
+        
+        # --- ROW 2: 5-DAYS ---
+        fiveday_left, fiveday_right = st.columns(2)
+        
+        with fiveday_left:
+            st.markdown(f"**🟢 5-DAYS: Planned Outages**")
+            feeder_list_fp = fiveday_planned[fiveday_planned['Circle'] == selected_circle].copy()
+            if not feeder_list_fp.empty:
+                feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
+                feeder_list_fp = feeder_list_fp[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
+            else:
+                feeder_list_fp = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+            st.dataframe(feeder_list_fp, use_container_width=True, hide_index=True)
+            
+        with fiveday_right:
+            st.markdown(f"**🟢 5-DAYS: Unplanned Outages**")
+            feeder_list_fu = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_circle].copy()
+            if not feeder_list_fu.empty:
+                feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
+                feeder_list_fu = feeder_list_fu[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
+            else:
+                feeder_list_fu = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+            st.dataframe(feeder_list_fu, use_container_width=True, hide_index=True)
 else:
     st.info("No circle data available.")
