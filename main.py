@@ -392,7 +392,7 @@ else:
 
 combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
 
-st.markdown("👆 **Click on any row inside the table below** to view the specific Feeder drill-down details.")
+st.markdown(" **Click on any row inside the table below** to view the specific Feeder drill-down details.")
 
 if not combined_circle.empty:
     # Apply header styling to the main interactive dataframe
