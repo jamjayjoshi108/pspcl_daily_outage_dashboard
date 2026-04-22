@@ -94,19 +94,18 @@ COLOR_UNPLANNED = "#45a29e"
 
 st.title("⚡ Power Outage Monitoring Dashboard")
 
-# --- MAIN LAYOUT (Matches Notebook Left/Right Pages) ---
+# --- TOP HALF: SPLIT VIEW (KPIs and Zone Summaries) ---
 col_left, col_right = st.columns(2, gap="large")
 
 # ==========================================
 # LEFT PAGE: TODAY'S OUTAGES
 # ==========================================
 with col_left:
-    st.header(f"📅 Today's Outages ({datetime.now().strftime('%d %b %Y')})")
+    st.header(f"📅 Today's Outages ({datetime.now(IST).strftime('%d %b %Y')})")
     
-    # Top KPI Boxes
+    # KPIs
     st.subheader("Outage Summary")
     kpi1, kpi2 = st.columns(2)
-    
     today_planned = df_today[df_today['Type of Outage'] == 'Planned Outage']
     today_unplanned = df_today[df_today['Type of Outage'] == 'Unplanned Outage']
     
@@ -120,41 +119,18 @@ with col_left:
 
     st.divider()
 
-    # Middle Boxes: Zone-wise Charts
-    st.subheader("Zone-wise Distribution")
-    chart_col1, chart_col2 = st.columns(2)
-    
-    with chart_col1:
-        fig_zone_p = px.histogram(today_planned, x="Zone", title="Zone-wise Planned", color_discrete_sequence=[COLOR_PLANNED])
-        fig_zone_p.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250)
-        st.plotly_chart(fig_zone_p, use_container_width=True)
+    # Zone-wise Table (Replaces Bar Chart)
+    st.subheader("Zone-wise Distribution (Today)")
+    if not df_today.empty:
+        zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+        # Ensure columns exist even if data is missing for one type
+        if 'Planned Outage' not in zone_today: zone_today['Planned Outage'] = 0
+        if 'Unplanned Outage' not in zone_today: zone_today['Unplanned Outage'] = 0
+        zone_today['Total'] = zone_today['Planned Outage'] + zone_today['Unplanned Outage']
         
-    with chart_col2:
-        fig_zone_u = px.histogram(today_unplanned, x="Zone", title="Zone-wise Unplanned", color_discrete_sequence=[COLOR_UNPLANNED])
-        fig_zone_u.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250)
-        st.plotly_chart(fig_zone_u, use_container_width=True)
-
-    st.divider()
-
-    # Bottom Table: Circle-wise Planned Breakdown
-    st.subheader("Circle-wise Planned Breakdown")
-    bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
-    
-    if not today_planned.empty:
-        # Create Pivot Table
-        planned_pivot = pd.crosstab(today_planned['Circle'], today_planned['Duration Bucket'])
-        # Reorder columns to match notebook logically
-        planned_pivot = planned_pivot.reindex(columns=[c for c in bucket_order if c in planned_pivot.columns], fill_value=0)
-        planned_pivot['Total Planned Outages'] = planned_pivot.sum(axis=1)
-        st.dataframe(planned_pivot, use_container_width=True)
-        
-        # Feeder Drill-Down
-        st.markdown("**Click a Circle to view Feeder Details:**")
-        selected_circle = st.selectbox("Select Circle:", options=planned_pivot.index, key="circle_select")
-        feeder_list = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
-        st.dataframe(feeder_list, use_container_width=True, hide_index=True)
+        st.dataframe(zone_today, use_container_width=True, hide_index=True)
     else:
-        st.info("No Planned Outages recorded today.")
+        st.info("No data available for today.")
 
 
 # ==========================================
@@ -163,10 +139,9 @@ with col_left:
 with col_right:
     st.header("⏳ Last 5 Days Trends")
     
-    # Top KPI Boxes
+    # KPIs
     st.subheader("Outage Summary (5 Days)")
     kpi3, kpi4 = st.columns(2)
-    
     fiveday_planned = df_5day[df_5day['Type of Outage'] == 'Planned Outage']
     fiveday_unplanned = df_5day[df_5day['Type of Outage'] == 'Unplanned Outage']
     
@@ -178,35 +153,61 @@ with col_right:
 
     st.divider()
 
-    # Middle Boxes: Zone-wise Charts
-    st.subheader("Zone-wise Distribution")
-    chart_col3, chart_col4 = st.columns(2)
-    
-    with chart_col3:
-        fig_5_zone_p = px.histogram(fiveday_planned, x="Zone", title="Zone-wise Planned", color_discrete_sequence=[COLOR_PLANNED])
-        fig_5_zone_p.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250)
-        st.plotly_chart(fig_5_zone_p, use_container_width=True)
+    # Zone-wise Table (Replaces Bar Chart)
+    st.subheader("Zone-wise Distribution (5 Days)")
+    if not df_5day.empty:
+        zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+        if 'Planned Outage' not in zone_5day: zone_5day['Planned Outage'] = 0
+        if 'Unplanned Outage' not in zone_5day: zone_5day['Unplanned Outage'] = 0
+        zone_5day['Total'] = zone_5day['Planned Outage'] + zone_5day['Unplanned Outage']
         
-    with chart_col4:
-        fig_5_zone_u = px.histogram(fiveday_unplanned, x="Zone", title="Zone-wise Unplanned", color_discrete_sequence=[COLOR_UNPLANNED])
-        fig_5_zone_u.update_layout(margin=dict(l=0, r=0, t=30, b=0), height=250)
-        st.plotly_chart(fig_5_zone_u, use_container_width=True)
-
-    st.divider()
-
-    # Bottom Table: Circle-wise Unplanned Breakdown
-    st.subheader("Circle-wise Unplanned Breakdown")
-    
-    if not fiveday_unplanned.empty:
-        unplanned_pivot = pd.crosstab(fiveday_unplanned['Circle'], fiveday_unplanned['Duration Bucket'])
-        unplanned_pivot = unplanned_pivot.reindex(columns=[c for c in bucket_order if c in unplanned_pivot.columns], fill_value=0)
-        unplanned_pivot['Total Unplanned Outages'] = unplanned_pivot.sum(axis=1)
-        st.dataframe(unplanned_pivot, use_container_width=True)
-        
-        # Feeder Drill-Down for Unplanned
-        st.markdown("**Click a Circle to view Unplanned Feeder Details:**")
-        selected_unplanned_circle = st.selectbox("Select Circle:", options=unplanned_pivot.index, key="circle_select_unplanned")
-        feeder_list_u = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_unplanned_circle][['Start Time', 'Feeder', 'Diff in mins', 'Duration Bucket']]
-        st.dataframe(feeder_list_u, use_container_width=True, hide_index=True)
+        st.dataframe(zone_5day, use_container_width=True, hide_index=True)
     else:
-        st.info("No Unplanned Outages recorded in the last 5 days.")
+        st.info("No data available for the last 5 days.")
+
+
+# ==========================================
+# BOTTOM HALF: FULL-WIDTH COMBINED SECTION
+# ==========================================
+st.divider()
+st.header("Comprehensive Circle-wise Breakdown")
+bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
+
+# 1. Prepare Today Planned Pivot
+if not today_planned.empty:
+    p_pivot = pd.crosstab(today_planned['Circle'], today_planned['Duration Bucket'])
+    p_pivot = p_pivot.reindex(columns=[c for c in bucket_order if c in p_pivot.columns], fill_value=0)
+    p_pivot['Total'] = p_pivot.sum(axis=1)
+else:
+    p_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
+
+# 2. Prepare 5-Day Unplanned Pivot
+if not fiveday_unplanned.empty:
+    u_pivot = pd.crosstab(fiveday_unplanned['Circle'], fiveday_unplanned['Duration Bucket'])
+    u_pivot = u_pivot.reindex(columns=[c for c in bucket_order if c in u_pivot.columns], fill_value=0)
+    u_pivot['Total'] = u_pivot.sum(axis=1)
+else:
+    u_pivot = pd.DataFrame(columns=bucket_order + ['Total'])
+
+# 3. Combine both into a single full-width MultiIndex Table
+combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
+
+st.dataframe(combined_circle, use_container_width=True)
+
+# 4. Unified Feeder Drill-Down
+st.subheader("Feeder Drill-Down Details")
+if not combined_circle.empty:
+    selected_circle = st.selectbox("Select a Circle to view detailed feeder lists:", options=combined_circle.index)
+    
+    # Split the drill-down view so it matches the combined table logic
+    drill_left, drill_right = st.columns(2)
+    
+    with drill_left:
+        st.markdown(f"**🔴 TODAY: Planned Feeders in {selected_circle}**")
+        feeder_list_p = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
+        st.dataframe(feeder_list_p, use_container_width=True, hide_index=True)
+        
+    with drill_right:
+        st.markdown(f"**🟢 5-DAYS: Unplanned Feeders in {selected_circle}**")
+        feeder_list_u = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_circle][['Start Time', 'Feeder', 'Diff in mins', 'Duration Bucket']]
+        st.dataframe(feeder_list_u, use_container_width=True, hide_index=True)
