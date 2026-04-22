@@ -30,7 +30,7 @@ jobs:
       - name: Run Scraper
         run: |
           python scraper.py
-          python last_year_scraper.py
+          
 
       - name: Archive, Commit and Push New CSVs
         run: |
