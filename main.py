@@ -253,7 +253,6 @@ def create_bucket_pivot(df, bucket_order):
     return pivot
 
 def generate_yoy_dist(df_curr, df_ly, group_col):
-    """Generates a structured YoY comparison dataframe by Zone or Circle."""
     if df_curr.empty:
         c_grp = pd.DataFrame(columns=[group_col, 'Planned Outage', 'Unplanned Outage'])
     else:
@@ -283,11 +282,33 @@ def generate_yoy_dist(df_curr, df_ly, group_col):
     return merged[[group_col, 'Curr Planned', 'LY Planned', 'Curr Unplanned', 'LY Unplanned', 'Curr Total', 'LY Total', 'YoY Delta (Total)']]
 
 def highlight_delta(val):
-    """Streamlit styler to highlight negative changes in green and positive in red."""
     if isinstance(val, int):
         if val > 0: return 'color: #D32F2F; font-weight: bold;'
         elif val < 0: return 'color: #388E3C; font-weight: bold;'
     return ''
+
+# Generates HTML for YoY KPI Cards matching the Dashboard Theme
+def generate_yoy_kpi_html(title, current_val, delta_val):
+    if delta_val > 0:
+        delta_str, delta_color = f"⬆ +{delta_val}", "#FF8A80" # Red for bad (increase in outages)
+    elif delta_val < 0:
+        delta_str, delta_color = f"⬇ {delta_val}", "#69F0AE" # Green for good (decrease in outages)
+    else:
+        delta_str, delta_color = "➖ 0", "#FFFFFF" # White for neutral
+        
+    return f'''
+        <div class="kpi-card">
+            <div>
+                <div class="kpi-title">{title}</div>
+                <div class="kpi-value">{current_val}</div>
+            </div>
+            <div class="kpi-subtext">
+                <span class="status-badge" style="color: {delta_color} !important; font-weight: bold;">
+                    {delta_str} vs Last Year
+                </span>
+            </div>
+        </div>
+    '''
 
 # --- NOTORIOUS FEEDERS CALCULATION ---
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
@@ -335,11 +356,13 @@ with tab2:
     ly_5day_u = len(df_5day_ly[df_5day_ly['Type of Outage'] == 'Unplanned Outage'])
     
     st.subheader(f"Executive Summary vs. Same Day Last Year ({ly_date.strftime('%d %b %Y')})")
-    met1, met2, met3, met4 = st.columns(4)
-    met1.metric(label="Planned (Today)", value=curr_today_p, delta=int(curr_today_p - ly_today_p), delta_color="inverse")
-    met2.metric(label="Unplanned (Today)", value=curr_today_u, delta=int(curr_today_u - ly_today_u), delta_color="inverse")
-    met3.metric(label="Planned (5 Days)", value=curr_5day_p, delta=int(curr_5day_p - ly_5day_p), delta_color="inverse")
-    met4.metric(label="Unplanned (5 Days)", value=curr_5day_u, delta=int(curr_5day_u - ly_5day_u), delta_color="inverse")
+    
+    # Replaced st.metric with styled KPI Cards
+    kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+    with kpi_col1: st.markdown(generate_yoy_kpi_html("Planned (Today)", curr_today_p, int(curr_today_p - ly_today_p)), unsafe_allow_html=True)
+    with kpi_col2: st.markdown(generate_yoy_kpi_html("Unplanned (Today)", curr_today_u, int(curr_today_u - ly_today_u)), unsafe_allow_html=True)
+    with kpi_col3: st.markdown(generate_yoy_kpi_html("Planned (5 Days)", curr_5day_p, int(curr_5day_p - ly_5day_p)), unsafe_allow_html=True)
+    with kpi_col4: st.markdown(generate_yoy_kpi_html("Unplanned (5 Days)", curr_5day_u, int(curr_5day_u - ly_5day_u)), unsafe_allow_html=True)
     
     st.divider()
 
@@ -370,7 +393,6 @@ with tab2:
     st.markdown("Displays the current top notorious feeders and shows their historical performance exactly a year ago.")
     
     if not df_5day_ly.empty:
-        # Calculate LY stats for joining
         df_5day_ly['Outage Date'] = df_5day_ly['Start Time'].dt.date
         f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='LY Days Out')
         f_stats_ly = df_5day_ly.groupby(['Circle', 'Feeder']).agg(
@@ -391,7 +413,6 @@ with tab2:
             'Total Duration (Hours)': 'Curr Duration (Hrs)'
         })
         
-        # Ensure integers for count columns
         noto_yoy['LY Days Out'] = noto_yoy['LY Days Out'].astype(int)
         noto_yoy['LY Events'] = noto_yoy['LY Events'].astype(int)
         
@@ -669,7 +690,6 @@ with tab1:
                     
                 if not feeder_list_fp.empty:
                     feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
-                    # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
                     feeder_list_fp = feeder_list_fp[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                     styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                     st.dataframe(styled_fp, use_container_width=True, hide_index=True)
@@ -686,7 +706,6 @@ with tab1:
                     
                 if not feeder_list_fu.empty:
                     feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
-                    # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
                     feeder_list_fu = feeder_list_fu[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                     styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                     st.dataframe(styled_fu, use_container_width=True, hide_index=True)
