@@ -21,7 +21,7 @@ HEADER_STYLES = [
         ]
     },
     {
-        'selector': 'th div', 
+        'selector': 'th div', # Targets the text inside the header div for specific Streamlit/Pandas versions
         'props': [
             ('color', '#FFC107 !important'),
             ('font-weight', 'bold !important')
@@ -226,19 +226,27 @@ def load_data(f_today, f_5day):
 
 df_today, df_5day = load_data(file_today, file_5day)
 
-# --- GLOBAL NOTORIOUS FEEDERS CALCULATION (FOR HIGHLIGHTING) ---
+# --- NOTORIOUS FEEDERS CALCULATION (GLOBAL BASELINE FOR HIGHLIGHTING) ---
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
-global_feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
-global_notorious = global_feeder_days[global_feeder_days['Days with Outages'] >= 3]
+feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
+notorious = feeder_days[feeder_days['Days with Outages'] >= 3]
 
-global_feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(
-    Total_Events=('Start Time', 'size')
+feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(
+    Total_Events=('Start Time', 'size'),
+    Avg_Mins=('Diff in mins', 'mean'),
+    Total_Mins=('Diff in mins', 'sum')
 ).reset_index()
 
-global_notorious = global_notorious.merge(global_feeder_stats, on=['Circle', 'Feeder'])
-global_notorious = global_notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
-top_5_global = global_notorious.groupby('Circle').head(5)
-notorious_set = set(zip(top_5_global['Circle'], top_5_global['Feeder']))
+feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+feeder_stats['Total Duration (Hours)'] = (feeder_stats['Total_Mins'] / 60).round(2)
+feeder_stats['Average Duration (Hours)'] = (feeder_stats['Avg_Mins'] / 60).round(2)
+feeder_stats = feeder_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
+
+notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder'])
+notorious = notorious.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+top_5_notorious = notorious.groupby('Circle').head(5)
+
+notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
 
 
 # --- MAIN DASHBOARD RENDER ---
@@ -363,42 +371,42 @@ st.caption("Top 5 worst-performing feeders per circle based on continuous outage
 noto_col1, noto_col2 = st.columns(2)
 
 with noto_col1:
-    circle_options = ["All Circles"] + sorted(df_5day['Circle'].dropna().unique().tolist())
+    circle_options = ["All Circles"] + sorted(top_5_notorious['Circle'].unique().tolist())
     selected_notorious_circle = st.selectbox("Filter by Circle:", options=circle_options, index=0)
-    
+
 with noto_col2:
     outage_type_options = ["All Types", "Planned Outage", "Unplanned Outage"]
-    selected_outage_type = st.selectbox("Filter by Outage Type:", options=outage_type_options, index=0)
+    selected_notorious_type = st.selectbox("Filter by Outage Type:", options=outage_type_options, index=0)
 
-# Apply outage type filter dynamically
-df_notorious_base = df_5day.copy()
-if selected_outage_type != "All Types":
-    df_notorious_base = df_notorious_base[df_notorious_base['Type of Outage'] == selected_outage_type]
+# Dynamic filter specifically for displaying this table
+df_dyn = df_5day.copy()
+if selected_notorious_type != "All Types":
+    df_dyn = df_dyn[df_dyn['Type of Outage'] == selected_notorious_type]
 
-if not df_notorious_base.empty:
-    feeder_days_dyn = df_notorious_base.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
-    notorious_dyn = feeder_days_dyn[feeder_days_dyn['Days with Outages'] >= 3]
+if not df_dyn.empty:
+    dyn_days = df_dyn.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
+    dyn_noto = dyn_days[dyn_days['Days with Outages'] >= 3]
 
-    if not notorious_dyn.empty:
-        feeder_stats_dyn = df_notorious_base.groupby(['Circle', 'Feeder']).agg(
+    if not dyn_noto.empty:
+        dyn_stats = df_dyn.groupby(['Circle', 'Feeder']).agg(
             Total_Events=('Start Time', 'size'),
             Avg_Mins=('Diff in mins', 'mean'),
             Total_Mins=('Diff in mins', 'sum')
         ).reset_index()
 
-        feeder_stats_dyn.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
-        feeder_stats_dyn['Total Duration (Hours)'] = (feeder_stats_dyn['Total_Mins'] / 60).round(2)
-        feeder_stats_dyn['Average Duration (Hours)'] = (feeder_stats_dyn['Avg_Mins'] / 60).round(2)
-        feeder_stats_dyn = feeder_stats_dyn.drop(columns=['Avg_Mins', 'Total_Mins'])
+        dyn_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+        dyn_stats['Total Duration (Hours)'] = (dyn_stats['Total_Mins'] / 60).round(2)
+        dyn_stats['Average Duration (Hours)'] = (dyn_stats['Avg_Mins'] / 60).round(2)
+        dyn_stats = dyn_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
 
-        notorious_dyn = notorious_dyn.merge(feeder_stats_dyn, on=['Circle', 'Feeder'])
-        notorious_dyn = notorious_dyn.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
-        
-        # Apply circle filter before extracting top 5
+        dyn_noto = dyn_noto.merge(dyn_stats, on=['Circle', 'Feeder'])
+        dyn_noto = dyn_noto.sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+        dyn_top5 = dyn_noto.groupby('Circle').head(5)
+
         if selected_notorious_circle != "All Circles":
-            filtered_notorious = notorious_dyn[notorious_dyn['Circle'] == selected_notorious_circle].head(5)
+            filtered_notorious = dyn_top5[dyn_top5['Circle'] == selected_notorious_circle]
         else:
-            filtered_notorious = notorious_dyn.groupby('Circle').head(5)
+            filtered_notorious = dyn_top5
 
         if not filtered_notorious.empty:
             styled_notorious = filtered_notorious.style.format({
@@ -407,11 +415,11 @@ if not df_notorious_base.empty:
             }).set_table_styles(HEADER_STYLES)
             st.dataframe(styled_notorious, use_container_width=True, hide_index=True)
         else:
-            st.info(f"Excellent! No notorious feeders found for {selected_notorious_circle} under {selected_outage_type}.")
+            st.info(f"No notorious feeders found for {selected_notorious_circle} matching the criteria.")
     else:
-        st.info(f"Excellent! No notorious feeders identified for {selected_outage_type}.")
+        st.info(f"No notorious feeders identified for {selected_notorious_type}.")
 else:
-     st.info("No data available for the selected outage type.")
+    st.info("No data available for the selected outage type.")
 
 
 # ==========================================
@@ -449,23 +457,21 @@ if not combined_circle.empty:
         selection_mode="single-row" 
     )
 
-    # --- DRILL-DOWN LOGIC ---
     if len(selection_event.selection.rows) > 0:
         selected_index = selection_event.selection.rows[0]
         selected_circle = combined_circle.index[selected_index]
         
         st.subheader(f"Feeder Details for: {selected_circle}")
         
-        # --- HIDDEN DATE FILTER FOR 5-DAYS TABLES ---
-        circle_dates = sorted(df_5day[df_5day['Circle'] == selected_circle]['Outage Date'].dropna().unique())
-        
-        st.markdown("**Filter 5-Days View by Date:**")
+        # --- DRILL-DOWN DATE FILTER ---
+        circle_dates_raw = df_5day[df_5day['Circle'] == selected_circle]['Outage Date'].dropna().unique()
+        circle_dates = sorted(list(circle_dates_raw))
+
         selected_dates = st.multiselect(
-            "Select Dates",
+            "Filter 5-Days View by Date:",
             options=circle_dates,
             default=circle_dates,
-            format_func=lambda x: x.strftime('%d %b %Y'),
-            label_visibility="collapsed"
+            format_func=lambda x: x.strftime('%d %b %Y')
         )
         
         def highlight_notorious(row):
@@ -496,33 +502,35 @@ if not combined_circle.empty:
         with fiveday_left:
             st.markdown(f"**🟢 5-DAYS: Planned Outages**")
             feeder_list_fp = fiveday_planned[fiveday_planned['Circle'] == selected_circle].copy()
+            
             if not feeder_list_fp.empty:
-                # Apply Date Filter
                 feeder_list_fp = feeder_list_fp[feeder_list_fp['Outage Date'].isin(selected_dates)]
                 
             if not feeder_list_fp.empty:
                 feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
-                feeder_list_fp = feeder_list_fp[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
+                # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
+                feeder_list_fp = feeder_list_fp[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                 styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                 st.dataframe(styled_fp, use_container_width=True, hide_index=True)
             else:
-                empty_df = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+                empty_df = pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
                 st.dataframe(empty_df.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
             
         with fiveday_right:
             st.markdown(f"**🟢 5-DAYS: Unplanned Outages**")
             feeder_list_fu = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_circle].copy()
+            
             if not feeder_list_fu.empty:
-                # Apply Date Filter
                 feeder_list_fu = feeder_list_fu[feeder_list_fu['Outage Date'].isin(selected_dates)]
                 
             if not feeder_list_fu.empty:
                 feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
-                feeder_list_fu = feeder_list_fu[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
+                # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
+                feeder_list_fu = feeder_list_fu[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                 styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                 st.dataframe(styled_fu, use_container_width=True, hide_index=True)
             else:
-                empty_df = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+                empty_df = pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
                 st.dataframe(empty_df.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
 else:
     st.info("No circle data available.")
