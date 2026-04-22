@@ -1,4 +1,3 @@
-
 import os
 import time
 import requests
@@ -10,7 +9,6 @@ from datetime import datetime, timedelta, timezone
 st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
 
 # --- GLOBAL TABLE HEADER STYLING ---
-# This applies the Blue background (#004085) and Gold text (#FFC107) to all table headers
 HEADER_STYLES = [
     {
         'selector': 'th',
@@ -22,7 +20,7 @@ HEADER_STYLES = [
         ]
     },
     {
-        'selector': 'th div', # Targets the text inside the header div for specific Streamlit/Pandas versions
+        'selector': 'th div',
         'props': [
             ('color', '#FFC107 !important'),
             ('font-weight', 'bold !important')
@@ -45,7 +43,7 @@ st.markdown("""
             color: #000000 !important;
         }
 
-        /* UNIFIED HEADERS: ALL USE IDENTICAL PROFESSIONAL BLUE */
+        /* UNIFIED HEADERS */
         h1, h2, h3, h4, h5, h6, div.block-container h1 {
             color: #004085 !important;
             font-weight: 700 !important;
@@ -137,7 +135,7 @@ st.markdown("""
             color: #FFFFFF !important;
         }
 
-        /* TABLE BORDERS: ENFORCING PROFESSIONAL BLUE */
+        /* TABLE BORDERS */
         [data-testid="stDataFrame"] > div {
             border: 2px solid #004085 !important;
             border-radius: 6px;
@@ -168,12 +166,31 @@ def trigger_scraper():
         st.error(f"❌ Failed to trigger scraper. GitHub responded: {response.text}")
         return False
 
-# --- 1. FILE CHECKING LOGIC ---
-today_str = datetime.now(IST).strftime("%Y-%m-%d")
+# --- 1. FILE DEFINITIONS & CHECKING LOGIC ---
+now_ist = datetime.now(IST)
+today_str = now_ist.strftime("%Y-%m-%d")
+
+# Calculate Last Year's Date safely
+try:
+    ly_date = now_ist.replace(year=now_ist.year - 1)
+except ValueError:
+    ly_date = now_ist.replace(year=now_ist.year - 1, day=28)
+ly_str = ly_date.strftime("%Y-%m-%d")
+
 file_today = f"{today_str}_Outages_Today.csv"
 file_5day = f"{today_str}_Outages_Last_5_Days.csv"
+file_today_ly = f"{ly_str}_Outages_Today_Last_Year.csv"
+file_5day_ly = f"{ly_str}_Outages_Last_5_Days_Last_Year.csv"
 
-if not os.path.exists(file_today) or not os.path.exists(file_5day):
+# Check if ANY of the 4 files are missing
+files_missing = not (
+    os.path.exists(file_today) and 
+    os.path.exists(file_5day) and 
+    os.path.exists(file_today_ly) and 
+    os.path.exists(file_5day_ly)
+)
+
+if files_missing:
     lock_file = "scraper_lock.txt"
     should_trigger = True
     
@@ -186,7 +203,7 @@ if not os.path.exists(file_today) or not os.path.exists(file_5day):
         if success:
             with open(lock_file, "w") as f:
                 f.write(str(time.time()))
-            st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
+            st.warning(f"⚠️ Data for current or YoY dates is missing. Automatically fetching fresh data from PSPCL...")
             st.info("⏳ Please wait ~2 minutes and refresh this page.")
         else:
             st.error("🚨 Could not fetch data due to GitHub API error. Fix the token to continue.")
@@ -227,7 +244,7 @@ def load_data(f_today, f_5day):
 
 df_today, df_5day = load_data(file_today, file_5day)
 
-# --- NOTORIOUS FEEDERS CALCULATION (GLOBAL BASELINE FOR HIGHLIGHTING) ---
+# --- NOTORIOUS FEEDERS CALCULATION ---
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
 feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
 notorious = feeder_days[feeder_days['Days with Outages'] >= 3]
@@ -260,47 +277,32 @@ with tab2:
     st.header("📈 Year-over-Year Comparison")
     st.markdown("Comparing current outage volumes to the exact same timeframe from last year.")
     
-    # Safely determine last year's date string
-    now_ist = datetime.now(IST)
-    try:
-        ly_date = now_ist.replace(year=now_ist.year - 1)
-    except ValueError:
-        ly_date = now_ist.replace(year=now_ist.year - 1, day=28)
-    ly_str = ly_date.strftime("%Y-%m-%d")
+    # We load the YoY data here using the filenames defined at the top
+    df_today_ly, df_5day_ly = load_data(file_today_ly, file_5day_ly)
     
-    file_today_ly = f"{ly_str}_Outages_Today_Last_Year.csv"
-    file_5day_ly = f"{ly_str}_Outages_Last_5_Days_Last_Year.csv"
+    # Calculate current counts
+    curr_today_p = len(df_today[df_today['Type of Outage'] == 'Planned Outage'])
+    curr_today_u = len(df_today[df_today['Type of Outage'] == 'Unplanned Outage'])
+    curr_5day_p = len(df_5day[df_5day['Type of Outage'] == 'Planned Outage'])
+    curr_5day_u = len(df_5day[df_5day['Type of Outage'] == 'Unplanned Outage'])
     
-    if os.path.exists(file_today_ly) and os.path.exists(file_5day_ly):
-        # We can reuse load_data since the structure is identical
-        df_today_ly, df_5day_ly = load_data(file_today_ly, file_5day_ly)
-        
-        # Calculate current counts
-        curr_today_p = len(df_today[df_today['Type of Outage'] == 'Planned Outage'])
-        curr_today_u = len(df_today[df_today['Type of Outage'] == 'Unplanned Outage'])
-        curr_5day_p = len(df_5day[df_5day['Type of Outage'] == 'Planned Outage'])
-        curr_5day_u = len(df_5day[df_5day['Type of Outage'] == 'Unplanned Outage'])
-        
-        # Calculate last year's counts
-        ly_today_p = len(df_today_ly[df_today_ly['Type of Outage'] == 'Planned Outage'])
-        ly_today_u = len(df_today_ly[df_today_ly['Type of Outage'] == 'Unplanned Outage'])
-        ly_5day_p = len(df_5day_ly[df_5day_ly['Type of Outage'] == 'Planned Outage'])
-        ly_5day_u = len(df_5day_ly[df_5day_ly['Type of Outage'] == 'Unplanned Outage'])
-        
-        st.subheader(f"Today vs. Same Day Last Year ({ly_date.strftime('%d %b %Y')})")
-        met1, met2 = st.columns(2)
-        met1.metric(label="Planned Outages (Today)", value=curr_today_p, delta=int(curr_today_p - ly_today_p), delta_color="inverse")
-        met2.metric(label="Unplanned Outages (Today)", value=curr_today_u, delta=int(curr_today_u - ly_today_u), delta_color="inverse")
-        
-        st.divider()
-        
-        st.subheader("Last 5 Days vs. Same 5 Days Last Year")
-        met3, met4 = st.columns(2)
-        met3.metric(label="Planned Outages (5 Days)", value=curr_5day_p, delta=int(curr_5day_p - ly_5day_p), delta_color="inverse")
-        met4.metric(label="Unplanned Outages (5 Days)", value=curr_5day_u, delta=int(curr_5day_u - ly_5day_u), delta_color="inverse")
-        
-    else:
-        st.info(f"Last year's data ({ly_str}) is currently unavailable. Please ensure the YoY scraper has run successfully.")
+    # Calculate last year's counts
+    ly_today_p = len(df_today_ly[df_today_ly['Type of Outage'] == 'Planned Outage'])
+    ly_today_u = len(df_today_ly[df_today_ly['Type of Outage'] == 'Unplanned Outage'])
+    ly_5day_p = len(df_5day_ly[df_5day_ly['Type of Outage'] == 'Planned Outage'])
+    ly_5day_u = len(df_5day_ly[df_5day_ly['Type of Outage'] == 'Unplanned Outage'])
+    
+    st.subheader(f"Today vs. Same Day Last Year ({ly_date.strftime('%d %b %Y')})")
+    met1, met2 = st.columns(2)
+    met1.metric(label="Planned Outages (Today)", value=curr_today_p, delta=int(curr_today_p - ly_today_p), delta_color="inverse")
+    met2.metric(label="Unplanned Outages (Today)", value=curr_today_u, delta=int(curr_today_u - ly_today_u), delta_color="inverse")
+    
+    st.divider()
+    
+    st.subheader("Last 5 Days vs. Same 5 Days Last Year")
+    met3, met4 = st.columns(2)
+    met3.metric(label="Planned Outages (5 Days)", value=curr_5day_p, delta=int(curr_5day_p - ly_5day_p), delta_color="inverse")
+    met4.metric(label="Unplanned Outages (5 Days)", value=curr_5day_u, delta=int(curr_5day_u - ly_5day_u), delta_color="inverse")
 
 
 with tab1:
@@ -311,7 +313,7 @@ with tab1:
     # LEFT PAGE: TODAY'S OUTAGES
     # ==========================================
     with col_left:
-        st.header(f"📅 Today's Outages ({datetime.now(IST).strftime('%d %b %Y')})")
+        st.header(f"📅 Today's Outages ({now_ist.strftime('%d %b %Y')})")
         
         today_planned = df_today[df_today['Type of Outage'] == 'Planned Outage']
         today_unplanned = df_today[df_today['Type of Outage'] == 'Unplanned Outage']
@@ -560,7 +562,6 @@ with tab1:
                     
                 if not feeder_list_fp.empty:
                     feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
-                    # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
                     feeder_list_fp = feeder_list_fp[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                     styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                     st.dataframe(styled_fp, use_container_width=True, hide_index=True)
@@ -577,7 +578,6 @@ with tab1:
                     
                 if not feeder_list_fu.empty:
                     feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
-                    # EXPLICITLY ADDING OUTAGE DATE COLUMN HERE
                     feeder_list_fu = feeder_list_fu[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
                     styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                     st.dataframe(styled_fu, use_container_width=True, hide_index=True)
