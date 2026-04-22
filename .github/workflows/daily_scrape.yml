@@ -4,7 +4,7 @@ name: Daily PSPCL Data Scrape
 on:
   schedule:
     - cron: '30 14 * * *'
-  workflow_dispatch: 
+  workflow_dispatch:
 
 # Grants permission to push the new CSV files back into your repository
 permissions:
