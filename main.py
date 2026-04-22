@@ -308,11 +308,11 @@ if not combined_circle.empty:
             feeder_list_tp = feeder_list_tp.rename(columns={'Status_Calc': 'Status'})
             st.dataframe(feeder_list_tp, use_container_width=True, hide_index=True)
             
-        # with today_right:
-        #     st.markdown(f"**🔴 TODAY: Unplanned Outages**")
-        #     feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
-        #     feeder_list_tu = feeder_list_tu.rename(columns={'Status_Calc': 'Status'})
-        #     st.dataframe(feeder_list_tu, use_container_width=True, hide_index=True)
+        with today_right:
+            st.markdown(f"**🔴 TODAY: Unplanned Outages**")
+            feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
+            feeder_list_tu = feeder_list_tu.rename(columns={'Status_Calc': 'Status'})
+            st.dataframe(feeder_list_tu, use_container_width=True, hide_index=True)
             
         st.write("") # Adds a tiny bit of vertical spacing
         
@@ -328,12 +328,6 @@ if not combined_circle.empty:
             else:
                 feeder_list_fp = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
             st.dataframe(feeder_list_fp, use_container_width=True, hide_index=True)
-       
-        with today_right:
-            st.markdown(f"**🔴 TODAY: Unplanned Outages**")
-            feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
-            feeder_list_tu = feeder_list_tu.rename(columns={'Status_Calc': 'Status'})
-            st.dataframe(feeder_list_tu, use_container_width=True, hide_index=True)
             
         with fiveday_right:
             st.markdown(f"**🟢 5-DAYS: Unplanned Outages**")
