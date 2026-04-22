@@ -134,7 +134,6 @@ def load_data(f_today, f_5day):
     for df in [df_today, df_5day]:
         for col in time_cols:
             df[col] = pd.to_datetime(df[col], errors='coerce')
-        # We use the End Time to accurately dictate Active vs Closed Status
         df['Status_Calc'] = df['End Time'].apply(lambda x: 'Active' if pd.isna(x) else 'Closed')
         
         def assign_bucket(mins):
@@ -215,29 +214,23 @@ with col_right:
     fiveday_planned = df_5day[df_5day['Type of Outage'] == 'Planned Outage']
     fiveday_unplanned = df_5day[df_5day['Type of Outage'] == 'Unplanned Outage']
     
-    # Styled KPIs with Active/Closed Subtext
+    # Styled KPIs WITHOUT Active/Closed Subtext
     st.subheader("Outage Summary (5 Days)")
     kpi3, kpi4 = st.columns(2)
     
     with kpi3:
-        active_5p = len(fiveday_planned[fiveday_planned['Status_Calc'] == 'Active'])
-        closed_5p = len(fiveday_planned[fiveday_planned['Status_Calc'] == 'Closed'])
         st.markdown(f'''
             <div class="kpi-card">
                 <div class="kpi-title">Total Planned Outages</div>
                 <div class="kpi-value">{len(fiveday_planned)}</div>
-                <div class="kpi-subtext">🔴 Active: {active_5p} &nbsp;|&nbsp; 🟢 Closed: {closed_5p}</div>
             </div>
         ''', unsafe_allow_html=True)
         
     with kpi4:
-        active_5u = len(fiveday_unplanned[fiveday_unplanned['Status_Calc'] == 'Active'])
-        closed_5u = len(fiveday_unplanned[fiveday_unplanned['Status_Calc'] == 'Closed'])
         st.markdown(f'''
             <div class="kpi-card">
                 <div class="kpi-title">Total Unplanned Outages</div>
                 <div class="kpi-value">{len(fiveday_unplanned)}</div>
-                <div class="kpi-subtext">🔴 Active: {active_5u} &nbsp;|&nbsp; 🟢 Closed: {closed_5u}</div>
             </div>
         ''', unsafe_allow_html=True)
 
@@ -282,21 +275,39 @@ else:
 # 3. Combine both into a single full-width MultiIndex Table
 combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Outages)', 'LAST 5 DAYS (Unplanned Outages)']).fillna(0).astype(int)
 
-st.dataframe(combined_circle, use_container_width=True)
+st.markdown("👆 **Click on any row inside the table below** to view the specific Feeder drill-down details.")
 
-# 4. Unified Feeder Drill-Down
-st.subheader("Feeder Drill-Down Details")
+# The table is now interactive. When you click a row, it triggers an event.
 if not combined_circle.empty:
-    selected_circle = st.selectbox("Select a Circle to view detailed feeder lists:", options=combined_circle.index)
-    
-    drill_left, drill_right = st.columns(2)
-    
-    with drill_left:
-        st.markdown(f"**🔴 TODAY: Planned Feeders in {selected_circle}**")
-        feeder_list_p = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
-        st.dataframe(feeder_list_p, use_container_width=True, hide_index=True)
+    selection_event = st.dataframe(
+        combined_circle, 
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single_row"
+    )
+
+    # 4. Unified Feeder Drill-Down Triggered by Table Click
+    if len(selection_event.selection.rows) > 0:
+        # Get the selected row index, then map it back to the circle name
+        selected_index = selection_event.selection.rows[0]
+        selected_circle = combined_circle.index[selected_index]
         
-    with drill_right:
-        st.markdown(f"**🟢 5-DAYS: Unplanned Feeders in {selected_circle}**")
-        feeder_list_u = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_circle][['Start Time', 'Feeder', 'Diff in mins', 'Duration Bucket']]
-        st.dataframe(feeder_list_u, use_container_width=True, hide_index=True)
+        st.subheader(f"Feeder Details for: {selected_circle}")
+        drill_left, drill_right = st.columns(2)
+        
+        with drill_left:
+            st.markdown(f"**🔴 TODAY: Planned Feeders**")
+            feeder_list_p = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
+            # Rename for display
+            feeder_list_p = feeder_list_p.rename(columns={'Status_Calc': 'Status'})
+            st.dataframe(feeder_list_p, use_container_width=True, hide_index=True)
+            
+        with drill_right:
+            st.markdown(f"**🟢 5-DAYS: Unplanned Feeders**")
+            feeder_list_u = fiveday_unplanned[fiveday_unplanned['Circle'] == selected_circle].copy()
+            # Calculate Hours and format columns
+            feeder_list_u['Diff in Hours'] = (feeder_list_u['Diff in mins'] / 60).round(2)
+            feeder_list_u = feeder_list_u[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
+            st.dataframe(feeder_list_u, use_container_width=True, hide_index=True)
+else:
+    st.info("No circle data available.")
