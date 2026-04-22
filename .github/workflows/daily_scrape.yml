@@ -2,48 +2,51 @@ name: Daily PSPCL Data Scrape
 
 # This triggers the workflow automatically every day and allows you to click a button to run it manually
 on:
-  schedule:
-    - cron: '30 14 * * *'
-  workflow_dispatch:
+  schedule:
+    - cron: '30 14 * * *'
+  workflow_dispatch:
 
 # Grants permission to push the new CSV files back into your repository
 permissions:
-  contents: write
+  contents: write
 
 jobs:
-  scrape-and-update:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  scrape-and-update:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-      - name: Install Dependencies
-        run: |
-          pip install -r requirements.txt
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
 
-      - name: Run Scraper
-        run: |
+      - name: Run Scraper
+        run: |
           python scraper.py
           python last_year_scraper.py
 
-      - name: Archive, Commit and Push New CSVs
-        run: |
-          mkdir -p archive
-          # Copy files to archive folder so you have a historical log
-          cp *_Outages_*.csv archive/
-          
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          
-          git add *_Outages_*.csv archive/*
-          git commit -m "Automated daily data update and archive" || exit 0
-          git push
+      - name: Archive, Commit and Push New CSVs
+        run: |
+          mkdir -p archive
+          # Copy files to archive folder so you have a historical log
+          cp *_Outages_*.csv archive/
+          
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          git add *_Outages_*.csv archive/*
+          git commit -m "Automated daily data update and archive" || exit 0
+          git push
+
+
+          
 # name: Daily PSPCL Data Scrape
 
 # # This triggers the workflow automatically every day and allows you to click a button to run it manually
