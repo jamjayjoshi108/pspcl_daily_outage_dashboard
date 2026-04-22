@@ -22,8 +22,10 @@ def trigger_scraper():
     
     if response.status_code == 204:
         st.toast("✅ Scraper triggered successfully in the cloud!")
+        return True
     else:
         st.error(f"❌ Failed to trigger scraper. GitHub responded: {response.text}")
+        return False
 
 # --- 1. FILE CHECKING LOGIC (OUTSIDE CACHE) ---
 today_str = datetime.now(IST).strftime("%Y-%m-%d")
@@ -40,15 +42,21 @@ if not os.path.exists(file_today) or not os.path.exists(file_5day):
             should_trigger = False
             
     if should_trigger:
-        trigger_scraper()
-        with open(lock_file, "w") as f:
-            f.write(str(time.time()))
-        st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
-        st.info("⏳ Please wait ~2 minutes and refresh this page.")
+        success = trigger_scraper()
+        
+        if success:
+            # Only create the lock file and tell the user to wait IF the trigger actually worked
+            with open(lock_file, "w") as f:
+                f.write(str(time.time()))
+            st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
+            st.info("⏳ Please wait ~2 minutes and refresh this page.")
+        else:
+            st.error("🚨 Could not fetch data due to GitHub API error. Fix the token to continue.")
+            
     else:
         st.info("⏳ The scraper is currently running in the background. Please wait a moment and refresh.")
         
-    st.stop() # Halts the dashboard so it doesn't crash trying to load missing data
+    st.stop()
 
 # --- 2. DATA LOADING LOGIC (ONLY RUNS IF FILES EXIST) ---
 @st.cache_data(ttl="10m")
@@ -81,7 +89,7 @@ df_today, df_5day = load_data(file_today, file_5day)
 
 # Colors based on your uploaded image legend
 COLOR_PLANNED = "#ea4335" 
-COLOR_UNPLANNED = "#45a29e"
+COLOR_UNPLANNED = "#45a29e" 
 
 st.title("⚡ Power Outage Monitoring Dashboard")
 
