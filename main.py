@@ -36,6 +36,22 @@ st.markdown("""
             font-weight: 700 !important;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
+
+        HEADER_STYLES = [
+    {
+        'selector': 'th',
+        'props': [
+            ('background-color', '#004085'),
+            ('color', '#FFC107 !important'), /* Added !important here */
+            ('font-weight', 'bold'),
+            ('text-align', 'center')
+        ]
+    },
+    {
+        'selector': 'th div', /* Targets the text inside the header div */
+        'props': [('color', '#FFC107 !important')]
+    }
+]
         
         h1 {
             text-align: center;
