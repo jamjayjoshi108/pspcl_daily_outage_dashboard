@@ -8,6 +8,13 @@ from datetime import datetime, timedelta, timezone
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
 
+# --- GLOBAL TABLE HEADER STYLING ---
+# This applies the Blue background (#004085) and Gold text (#FFC107) to all table headers
+HEADER_STYLES = [{
+    'selector': 'th',
+    'props': [('background-color', '#004085'), ('color', '#FFC107'), ('font-weight', 'bold')]
+}]
+
 # --- COLOR THEME & ENTERPRISE CSS ---
 st.markdown("""
     <style>
@@ -23,9 +30,7 @@ st.markdown("""
             color: #000000 !important;
         }
 
-        /* ----------------------------------------------------
-           UNIFIED HEADERS: ALL USE IDENTICAL PROFESSIONAL BLUE 
-           ---------------------------------------------------- */
+        /* UNIFIED HEADERS: ALL USE IDENTICAL PROFESSIONAL BLUE */
         h1, h2, h3, h4, h5, h6 {
             color: #004085 !important;
             font-weight: 700 !important;
@@ -42,7 +47,7 @@ st.markdown("""
         
         h2 {
             font-size: 1.3rem !important;
-            border-bottom: 2px solid #004085 !important; /* Upgraded from grey to blue */
+            border-bottom: 2px solid #004085 !important;
             padding-bottom: 5px;
             margin-bottom: 10px !important;
         }
@@ -57,14 +62,12 @@ st.markdown("""
         /* Crisp Dividers */
         hr {
             border: 0;
-            border-top: 1px solid #004085; /* Changed from light grey to blue */
+            border-top: 1px solid #004085;
             margin: 1.5rem 0;
             opacity: 0.3;
         }
 
-        /* ----------------------------------------------------
-           EXECUTIVE KPI CARDS (Protecting inside text colors)
-           ---------------------------------------------------- */
+        /* EXECUTIVE KPI CARDS (Protecting inside text colors) */
         .kpi-card {
             background: linear-gradient(135deg, #004481 0%, #0066cc 100%);
             border-radius: 6px;
@@ -83,7 +86,6 @@ st.markdown("""
             box-shadow: 0 8px 16px rgba(0, 68, 129, 0.2);
         }
 
-        /* These must explicitly override the global black text */
         .kpi-card .kpi-title, .kpi-title {
             color: #FFC107 !important;
             font-weight: 600;
@@ -120,9 +122,7 @@ st.markdown("""
             color: #FFFFFF !important;
         }
 
-        /* ----------------------------------------------------
-           TABLE BORDERS: ENFORCING PROFESSIONAL BLUE
-           ---------------------------------------------------- */
+        /* TABLE BORDERS: ENFORCING PROFESSIONAL BLUE */
         [data-testid="stDataFrame"] > div {
             border: 2px solid #004085 !important;
             border-radius: 6px;
@@ -291,7 +291,8 @@ with col_left:
         if 'Unplanned Outage' not in zone_today: zone_today['Unplanned Outage'] = 0
         zone_today['Total'] = zone_today['Planned Outage'] + zone_today['Unplanned Outage']
         
-        st.dataframe(zone_today, use_container_width=True, hide_index=True)
+        # Apply header styling
+        st.dataframe(zone_today.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
     else:
         st.info("No data available for today.")
 
@@ -339,7 +340,8 @@ with col_right:
         if 'Unplanned Outage' not in zone_5day: zone_5day['Unplanned Outage'] = 0
         zone_5day['Total'] = zone_5day['Planned Outage'] + zone_5day['Unplanned Outage']
         
-        st.dataframe(zone_5day, use_container_width=True, hide_index=True)
+        # Apply header styling
+        st.dataframe(zone_5day.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
     else:
         st.info("No data available for the last 5 days.")
 
@@ -360,7 +362,8 @@ if not top_5_notorious.empty:
     else:
         filtered_notorious = top_5_notorious[top_5_notorious['Circle'] == selected_notorious_circle]
         
-    styled_notorious = filtered_notorious.style.format({'Average Duration (Hours)': '{:.2f}'})
+    # Apply format AND header styling
+    styled_notorious = filtered_notorious.style.format({'Average Duration (Hours)': '{:.2f}'}).set_table_styles(HEADER_STYLES)
     st.dataframe(styled_notorious, use_container_width=True, hide_index=True)
 else:
     st.info("Excellent! No notorious feeders identified matching this criteria.")
@@ -392,8 +395,11 @@ combined_circle = pd.concat([p_pivot, u_pivot], axis=1, keys=['TODAY (Planned Ou
 st.markdown("👆 **Click on any row inside the table below** to view the specific Feeder drill-down details.")
 
 if not combined_circle.empty:
+    # Apply header styling to the main interactive dataframe
+    styled_combined = combined_circle.style.set_table_styles(HEADER_STYLES)
+    
     selection_event = st.dataframe(
-        combined_circle, 
+        styled_combined, 
         use_container_width=True,
         on_select="rerun",
         selection_mode="single-row" 
@@ -416,14 +422,14 @@ if not combined_circle.empty:
             st.markdown(f"**🔴 TODAY: Planned Outages**")
             feeder_list_tp = today_planned[today_planned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
             feeder_list_tp = feeder_list_tp.rename(columns={'Status_Calc': 'Status'})
-            styled_tp = feeder_list_tp.style.apply(highlight_notorious, axis=1)
+            styled_tp = feeder_list_tp.style.apply(highlight_notorious, axis=1).set_table_styles(HEADER_STYLES)
             st.dataframe(styled_tp, use_container_width=True, hide_index=True)
             
         with today_right:
             st.markdown(f"**🔴 TODAY: Unplanned Outages**")
             feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']]
             feeder_list_tu = feeder_list_tu.rename(columns={'Status_Calc': 'Status'})
-            styled_tu = feeder_list_tu.style.apply(highlight_notorious, axis=1)
+            styled_tu = feeder_list_tu.style.apply(highlight_notorious, axis=1).set_table_styles(HEADER_STYLES)
             st.dataframe(styled_tu, use_container_width=True, hide_index=True)
             
         st.write("") 
@@ -436,10 +442,11 @@ if not combined_circle.empty:
             if not feeder_list_fp.empty:
                 feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
                 feeder_list_fp = feeder_list_fp[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
-                styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'})
+                styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                 st.dataframe(styled_fp, use_container_width=True, hide_index=True)
             else:
-                st.dataframe(pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']), use_container_width=True, hide_index=True)
+                empty_df = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+                st.dataframe(empty_df.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
             
         with fiveday_right:
             st.markdown(f"**🟢 5-DAYS: Unplanned Outages**")
@@ -447,10 +454,11 @@ if not combined_circle.empty:
             if not feeder_list_fu.empty:
                 feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
                 feeder_list_fu = feeder_list_fu[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
-                styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'})
+                styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES)
                 st.dataframe(styled_fu, use_container_width=True, hide_index=True)
             else:
-                st.dataframe(pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']), use_container_width=True, hide_index=True)
+                empty_df = pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket'])
+                st.dataframe(empty_df.style.set_table_styles(HEADER_STYLES), use_container_width=True, hide_index=True)
 else:
     st.info("No circle data available.")
 
