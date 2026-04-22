@@ -425,6 +425,24 @@ with tab2:
 
     # st.divider()
 
+    # st.subheader("Comprehensive Circle-wise Breakdown YoY (Last 5 Days)")
+    # bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
+    
+    # curr_5d_p = create_bucket_pivot(df_5day[df_5day['Type of Outage'] == 'Planned Outage'], bucket_order)
+    # curr_5d_u = create_bucket_pivot(df_5day[df_5day['Type of Outage'] == 'Unplanned Outage'], bucket_order)
+    # ly_5d_p = create_bucket_pivot(df_5day_ly[df_5day_ly['Type of Outage'] == 'Planned Outage'], bucket_order)
+    # ly_5d_u = create_bucket_pivot(df_5day_ly[df_5day_ly['Type of Outage'] == 'Unplanned Outage'], bucket_order)
+    
+    # comp_p = pd.concat([curr_5d_p, ly_5d_p], axis=1, keys=['Current 5 Days (Planned)', 'Last Year 5 Days (Planned)']).fillna(0).astype(int)
+    # comp_u = pd.concat([curr_5d_u, ly_5d_u], axis=1, keys=['Current 5 Days (Unplanned)', 'Last Year 5 Days (Unplanned)']).fillna(0).astype(int)
+    
+    # st.markdown("**Planned Outages Summary:**")
+    # st.dataframe(comp_p.style.set_table_styles(HEADER_STYLES), width="stretch")
+    
+    # st.markdown("**Unplanned Outages Summary:**")
+    # st.dataframe(comp_u.style.set_table_styles(HEADER_STYLES), width="stretch")
+
+    # --- 4) COMPREHENSIVE CIRCLE BREAKDOWN YOY ---
     st.subheader("4. Comprehensive Circle-wise Breakdown YoY (Last 5 Days)")
     bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
     
@@ -436,11 +454,24 @@ with tab2:
     comp_p = pd.concat([curr_5d_p, ly_5d_p], axis=1, keys=['Current 5 Days (Planned)', 'Last Year 5 Days (Planned)']).fillna(0).astype(int)
     comp_u = pd.concat([curr_5d_u, ly_5d_u], axis=1, keys=['Current 5 Days (Unplanned)', 'Last Year 5 Days (Unplanned)']).fillna(0).astype(int)
     
+    # Inline function to highlight "Current" cells by comparing them to "Last Year"
+    def highlight_yoy_cells(row):
+        styles = [''] * len(row)
+        for i, col in enumerate(row.index):
+            if 'Current' in col[0]:
+                ly_col = (col[0].replace('Current', 'Last Year'), col[1])
+                if ly_col in row.index:
+                    if row[col] > row[ly_col]:
+                        styles[i] = 'color: #D32F2F; font-weight: bold; background-color: rgba(211, 47, 47, 0.1);' # Red for increase
+                    elif row[col] < row[ly_col]:
+                        styles[i] = 'color: #388E3C; font-weight: bold; background-color: rgba(56, 142, 60, 0.1);' # Green for decrease
+        return styles
+
     st.markdown("**Planned Outages Summary:**")
-    st.dataframe(comp_p.style.set_table_styles(HEADER_STYLES), width="stretch")
+    st.dataframe(comp_p.style.apply(highlight_yoy_cells, axis=1).set_table_styles(HEADER_STYLES), width="stretch")
     
     st.markdown("**Unplanned Outages Summary:**")
-    st.dataframe(comp_u.style.set_table_styles(HEADER_STYLES), width="stretch")
+    st.dataframe(comp_u.style.apply(highlight_yoy_cells, axis=1).set_table_styles(HEADER_STYLES), width="stretch")
 
 
 with tab1:
