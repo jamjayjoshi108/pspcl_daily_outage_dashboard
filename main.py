@@ -273,19 +273,19 @@ def generate_yoy_dist(df_curr, df_ly, group_col):
         if col not in c_grp.columns: c_grp[col] = 0
         if col not in l_grp.columns: l_grp[col] = 0
 
-    c_grp['Curr Total'] = c_grp['Planned Outage'] + c_grp['Unplanned Outage']
-    l_grp['LY Total'] = l_grp['Planned Outage'] + l_grp['Unplanned Outage']
+    c_grp['2026 Total'] = c_grp['Planned Outage'] + c_grp['Unplanned Outage']
+    l_grp['2025 Total'] = l_grp['Planned Outage'] + l_grp['Unplanned Outage']
     
-    c_grp = c_grp.rename(columns={'Planned Outage': 'Curr Planned', 'Unplanned Outage': 'Curr Unplanned'})
-    l_grp = l_grp.rename(columns={'Planned Outage': 'LY Planned', 'Unplanned Outage': 'LY Unplanned'})
+    c_grp = c_grp.rename(columns={'Planned Outage': '2026 Planned', 'Unplanned Outage': '2026 Unplanned'})
+    l_grp = l_grp.rename(columns={'Planned Outage': '2025 Planned', 'Unplanned Outage': '2025 Unplanned'})
     
     merged = pd.merge(c_grp, l_grp, on=group_col, how='outer').fillna(0)
     
-    for col in ['Curr Planned', 'Curr Unplanned', 'Curr Total', 'LY Planned', 'LY Unplanned', 'LY Total']:
+    for col in ['2026 Planned', '2026 Unplanned', '2026 Total', '2025 Planned', '2025 Unplanned', '2025 Total']:
         merged[col] = merged[col].astype(int)
         
-    merged['YoY Delta (Total)'] = merged['Curr Total'] - merged['LY Total']
-    return merged[[group_col, 'Curr Planned', 'LY Planned', 'Curr Unplanned', 'LY Unplanned', 'Curr Total', 'LY Total', 'YoY Delta (Total)']]
+    merged['YoY Delta (Total)'] = merged['2026 Total'] - merged['2025 Total']
+    return merged[[group_col, '2026 Planned', '2025 Planned', '2026 Unplanned', '2025 Unplanned', '2026 Total', '2025 Total', 'YoY Delta (Total)']]
 
 def highlight_delta(val):
     if isinstance(val, int):
@@ -368,38 +368,38 @@ with tab2:
     
     st.divider()
 
-    st.subheader("1. Zone-wise Distribution YoY (Today)")
+    st.subheader("Zone-wise Distribution YoY (Today)")
     yoy_zone_today = generate_yoy_dist(df_today, df_today_ly, 'Zone')
     st.dataframe(yoy_zone_today.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
 
-    st.subheader("1.A. Circle-wise Distribution YoY (Today)")
+    st.subheader("Circle-wise Distribution YoY (Today)")
     yoy_circle_today = generate_yoy_dist(df_today, df_today_ly, 'Circle')
     st.dataframe(yoy_circle_today.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
     
     st.divider()
 
-    st.subheader("2. Zone-wise Distribution YoY (5 Days)")
+    st.subheader("Zone-wise Distribution YoY (5 Days)")
     yoy_zone_5day = generate_yoy_dist(df_5day, df_5day_ly, 'Zone')
     st.dataframe(yoy_zone_5day.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
 
-    st.subheader("2.A. Circle-wise Distribution YoY (5 Days)")
+    st.subheader("Circle-wise Distribution YoY (5 Days)")
     yoy_circle_5day = generate_yoy_dist(df_5day, df_5day_ly, 'Circle')
     st.dataframe(yoy_circle_5day.style.map(highlight_delta, subset=['YoY Delta (Total)']).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
     
     st.divider()
 
-    st.subheader("3. 🚨 Current Top Notorious Feeders vs. Last Year")
+    st.subheader("🚨 Current Top Notorious Feeders vs. Last Year")
     st.markdown("Displays the current top notorious feeders and shows their historical performance exactly a year ago.")
     
     if not df_5day_ly.empty:
         df_5day_ly['Outage Date'] = df_5day_ly['Start Time'].dt.date
-        f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='LY Days Out')
+        f_days_ly = df_5day_ly.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='2025 Days Out')
         f_stats_ly = df_5day_ly.groupby(['Circle', 'Feeder']).agg(
             LY_Events=('Start Time', 'size'),
             LY_Mins=('Diff in mins', 'sum')
         ).reset_index()
-        f_stats_ly['LY Duration (Hrs)'] = (f_stats_ly['LY_Mins'] / 60).round(2)
-        ly_noto = pd.merge(f_days_ly, f_stats_ly[['Circle', 'Feeder', 'LY_Events', 'LY Duration (Hrs)']], on=['Circle', 'Feeder'])
+        f_stats_ly['2025 Duration (Hrs)'] = (f_stats_ly['LY_Mins'] / 60).round(2)
+        ly_noto = pd.merge(f_days_ly, f_stats_ly[['Circle', 'Feeder', 'LY_Events', '2025 Duration (Hrs)']], on=['Circle', 'Feeder'])
         
         noto_yoy = pd.merge(
             top_5_notorious[['Circle', 'Feeder', 'Days with Outages', 'Total Outage Events', 'Total Duration (Hours)']], 
@@ -407,18 +407,18 @@ with tab2:
         ).fillna(0)
         
         noto_yoy = noto_yoy.rename(columns={
-            'Days with Outages': 'Curr Days Out',
-            'Total Outage Events': 'Curr Events',
-            'Total Duration (Hours)': 'Curr Duration (Hrs)',
-            'LY_Events': 'LY Events'
+            'Days with Outages': '2026 Days Out',
+            'Total Outage Events': '2026 Events',
+            'Total Duration (Hours)': '2026 Duration (Hrs)',
+            'LY_Events': '2025 Events'
         })
         
-        noto_yoy['LY Days Out'] = noto_yoy['LY Days Out'].astype(int)
-        noto_yoy['LY Events'] = noto_yoy['LY Events'].astype(int)
+        noto_yoy['2025 Days Out'] = noto_yoy['2025 Days Out'].astype(int)
+        noto_yoy['2025 Events'] = noto_yoy['2025 Events'].astype(int)
         
         st.dataframe(noto_yoy.style.format({
-            'Curr Duration (Hrs)': '{:.2f}', 
-            'LY Duration (Hrs)': '{:.2f}'
+            '2026 Duration (Hrs)': '{:.2f}', 
+            '2025 Duration (Hrs)': '{:.2f}'
         }).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
     else:
         st.info("No Notorious Feeder data available to map against Last Year.")
