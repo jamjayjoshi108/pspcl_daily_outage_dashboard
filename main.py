@@ -6,62 +6,59 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 
 # --- IST TIMEZONE SETUP ---
-# Forces Streamlit to always use Indian Standard Time (UTC +5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
 
 # --- GITHUB TRIGGER LOGIC ---
 def trigger_scraper():
-    repo_owner = "jamjayjoshi108"  # UPDATE THIS
-    repo_name = "pspcl_daily_outage_dashboard"   # UPDATE THIS 
+    repo_owner = "jamjayjoshi108"
+    repo_name = "pspcl_daily_outage_dashboard" 
     
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/daily_scrape.yml/dispatches"
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "Authorization": f"token {st.secrets['GITHUB_TOKEN']}"
     }
-    requests.post(url, headers=headers, json={"ref": "main"})
-
-# --- DATA LOADING ---
-@st.cache_data(ttl="1m")
-def load_data():
-    # Use the IST timezone to format the date string correctly
-    today_str = datetime.now(IST).strftime("%Y-%m-%d")
-    file_today = f"{today_str}_Outages_Today.csv"
-    file_5day = f"{today_str}_Outages_Last_5_Days.csv"
-        
-    # Check if today's files exist
-    if not os.path.exists(file_today) or not os.path.exists(file_5day):
-        lock_file = "scraper_lock.txt"
-        should_trigger = True
-        
-        # Cooldown check: Prevent spamming GitHub if you refresh while waiting
-        if os.path.exists(lock_file):
-            # If the lock file is less than 5 minutes old, don't trigger again
-            if time.time() - os.path.getmtime(lock_file) < 300: 
-                should_trigger = False
-                
-        if should_trigger:
-            trigger_scraper()
-            # Create the lock file to start the 5-minute cooldown
-            with open(lock_file, "w") as f:
-                f.write(str(time.time()))
-            st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
-            st.info("⏳ Please wait ~2 minutes and refresh this page.")
-        else:
-            st.info("⏳ The scraper is currently running in the background. Please wait a moment and refresh.")
-            
-        # Stop loading so we don't show old data
-        st.stop()
-        
-    # If files exist, load them normally
-    df_today = pd.read_csv(file_today)
-    df_5day = pd.read_csv(file_5day)
+    response = requests.post(url, headers=headers, json={"ref": "main"})
     
-    # Map outage types
+    if response.status_code == 204:
+        st.toast("✅ Scraper triggered successfully in the cloud!")
+    else:
+        st.error(f"❌ Failed to trigger scraper. GitHub responded: {response.text}")
+
+# --- 1. FILE CHECKING LOGIC (OUTSIDE CACHE) ---
+today_str = datetime.now(IST).strftime("%Y-%m-%d")
+file_today = f"{today_str}_Outages_Today.csv"
+file_5day = f"{today_str}_Outages_Last_5_Days.csv"
+
+if not os.path.exists(file_today) or not os.path.exists(file_5day):
+    lock_file = "scraper_lock.txt"
+    should_trigger = True
+    
+    if os.path.exists(lock_file):
+        # If the lock file is less than 5 minutes old, don't trigger again
+        if time.time() - os.path.getmtime(lock_file) < 300: 
+            should_trigger = False
+            
+    if should_trigger:
+        trigger_scraper()
+        with open(lock_file, "w") as f:
+            f.write(str(time.time()))
+        st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
+        st.info("⏳ Please wait ~2 minutes and refresh this page.")
+    else:
+        st.info("⏳ The scraper is currently running in the background. Please wait a moment and refresh.")
+        
+    st.stop() # Halts the dashboard so it doesn't crash trying to load missing data
+
+# --- 2. DATA LOADING LOGIC (ONLY RUNS IF FILES EXIST) ---
+@st.cache_data(ttl="10m")
+def load_data(f_today, f_5day):
+    df_today = pd.read_csv(f_today)
+    df_5day = pd.read_csv(f_5day)
+    
     df_today['Type of Outage'] = df_today['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
     df_5day['Type of Outage'] = df_5day['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
     
-    # Convert time columns and assign buckets
     time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
     for df in [df_today, df_5day]:
         for col in time_cols:
@@ -80,11 +77,11 @@ def load_data():
         
     return df_today, df_5day
 
-df_today, df_5day = load_data()
+df_today, df_5day = load_data(file_today, file_5day)
 
 # Colors based on your uploaded image legend
-COLOR_PLANNED = "#ea4335" # Red
-COLOR_UNPLANNED = "#45a29e" # Teal/Green
+COLOR_PLANNED = "#ea4335" 
+COLOR_UNPLANNED = "#45a29e"
 
 st.title("⚡ Power Outage Monitoring Dashboard")
 
