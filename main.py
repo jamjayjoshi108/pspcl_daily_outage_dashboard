@@ -152,7 +152,9 @@ def trigger_scraper():
     repo_owner = "jamjayjoshi108"
     repo_name = "pspcl_daily_outage_dashboard" 
     
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/daily_scrape.yml/dispatches"
+    # url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/daily_scrape.yml/dispatches"
+    # Using the exact Workflow ID from your diagnostic test
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/263899469/dispatches"
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "Authorization": f"token {st.secrets['GITHUB_TOKEN']}"
