@@ -10,10 +10,24 @@ st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide"
 
 # --- GLOBAL TABLE HEADER STYLING ---
 # This applies the Blue background (#004085) and Gold text (#FFC107) to all table headers
-HEADER_STYLES = [{
-    'selector': 'th',
-    'props': [('background-color', '#004085'), ('color', '#FFC107'), ('font-weight', 'bold')]
-}]
+HEADER_STYLES = [
+    {
+        'selector': 'th',
+        'props': [
+            ('background-color', '#004085 !important'),
+            ('color', '#FFC107 !important'),
+            ('font-weight', 'bold !important'),
+            ('text-align', 'center !important')
+        ]
+    },
+    {
+        'selector': 'th div', # Targets the text inside the header div for specific Streamlit/Pandas versions
+        'props': [
+            ('color', '#FFC107 !important'),
+            ('font-weight', 'bold !important')
+        ]
+    }
+]
 
 # --- COLOR THEME & ENTERPRISE CSS ---
 st.markdown("""
@@ -31,35 +45,18 @@ st.markdown("""
         }
 
         /* UNIFIED HEADERS: ALL USE IDENTICAL PROFESSIONAL BLUE */
-        h1, h2, h3, h4, h5, h6 {
+        h1, h2, h3, h4, h5, h6, div.block-container h1 {
             color: #004085 !important;
             font-weight: 700 !important;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        HEADER_STYLES = [
-    {
-        'selector': 'th',
-        'props': [
-            ('background-color', '#004085'),
-            ('color', '#FFC107 !important'), /* Added !important here */
-            ('font-weight', 'bold'),
-            ('text-align', 'center')
-        ]
-    },
-    {
-        'selector': 'th div', /* Targets the text inside the header div */
-        'props': [('color', '#FFC107 !important')]
-    }
-]
-        
-        h1 {
+        div.block-container h1 {
             text-align: center;
             border-bottom: 3px solid #004085 !important;
             padding-bottom: 10px;
             margin-bottom: 30px !important;
             font-size: 2.2rem !important;
-            color: #004085 !important;
         }
         
         h2 {
@@ -84,7 +81,7 @@ st.markdown("""
             opacity: 0.3;
         }
 
-        /* EXECUTIVE KPI CARDS (Protecting inside text colors) */
+        /* EXECUTIVE KPI CARDS */
         .kpi-card {
             background: linear-gradient(135deg, #004481 0%, #0066cc 100%);
             border-radius: 6px;
@@ -250,6 +247,7 @@ top_5_notorious = notorious.groupby('Circle').head(5)
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
 
 
+# --- MAIN DASHBOARD RENDER ---
 st.title("⚡ Power Outage Monitoring Dashboard")
 
 # --- TOP HALF: SPLIT VIEW ---
