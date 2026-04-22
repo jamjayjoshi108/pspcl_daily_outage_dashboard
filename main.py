@@ -58,6 +58,13 @@ st.markdown(f"""
             margin-bottom: 0;
             line-height: 1.2;
         }}
+        .kpi-subtext {{
+            color: {COLOR_KPI_VALUE_WHITE};
+            font-size: 0.85rem;
+            margin-top: 0.8rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }}
         /* White background for tables */
         .stDataFrame {{
             background-color: white;
@@ -127,6 +134,7 @@ def load_data(f_today, f_5day):
     for df in [df_today, df_5day]:
         for col in time_cols:
             df[col] = pd.to_datetime(df[col], errors='coerce')
+        # We use the End Time to accurately dictate Active vs Closed Status
         df['Status_Calc'] = df['End Time'].apply(lambda x: 'Active' if pd.isna(x) else 'Closed')
         
         def assign_bucket(mins):
@@ -157,17 +165,35 @@ with col_left:
     today_planned = df_today[df_today['Type of Outage'] == 'Planned Outage']
     today_unplanned = df_today[df_today['Type of Outage'] == 'Unplanned Outage']
     
-    # Styled KPIs
+    # Styled KPIs with Active/Closed Subtext
     st.subheader("Outage Summary")
     kpi1, kpi2 = st.columns(2)
+    
     with kpi1:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Planned Outages</div><div class="kpi-value">{len(today_planned)}</div></div>', unsafe_allow_html=True)
+        active_p = len(today_planned[today_planned['Status_Calc'] == 'Active'])
+        closed_p = len(today_planned[today_planned['Status_Calc'] == 'Closed'])
+        st.markdown(f'''
+            <div class="kpi-card">
+                <div class="kpi-title">Total Planned Outages</div>
+                <div class="kpi-value">{len(today_planned)}</div>
+                <div class="kpi-subtext">🔴 Active: {active_p} &nbsp;|&nbsp; 🟢 Closed: {closed_p}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
     with kpi2:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Unplanned Outages</div><div class="kpi-value">{len(today_unplanned)}</div></div>', unsafe_allow_html=True)
+        active_u = len(today_unplanned[today_unplanned['Status_Calc'] == 'Active'])
+        closed_u = len(today_unplanned[today_unplanned['Status_Calc'] == 'Closed'])
+        st.markdown(f'''
+            <div class="kpi-card">
+                <div class="kpi-title">Total Unplanned Outages</div>
+                <div class="kpi-value">{len(today_unplanned)}</div>
+                <div class="kpi-subtext">🔴 Active: {active_u} &nbsp;|&nbsp; 🟢 Closed: {closed_u}</div>
+            </div>
+        ''', unsafe_allow_html=True)
 
     st.divider()
 
-    # Zone-wise Table (Restored to exact previous working state)
+    # Zone-wise Table
     st.subheader("Zone-wise Distribution (Today)")
     if not df_today.empty:
         zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
@@ -189,17 +215,35 @@ with col_right:
     fiveday_planned = df_5day[df_5day['Type of Outage'] == 'Planned Outage']
     fiveday_unplanned = df_5day[df_5day['Type of Outage'] == 'Unplanned Outage']
     
-    # Styled KPIs
+    # Styled KPIs with Active/Closed Subtext
     st.subheader("Outage Summary (5 Days)")
     kpi3, kpi4 = st.columns(2)
+    
     with kpi3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Planned Outages</div><div class="kpi-value">{len(fiveday_planned)}</div></div>', unsafe_allow_html=True)
+        active_5p = len(fiveday_planned[fiveday_planned['Status_Calc'] == 'Active'])
+        closed_5p = len(fiveday_planned[fiveday_planned['Status_Calc'] == 'Closed'])
+        st.markdown(f'''
+            <div class="kpi-card">
+                <div class="kpi-title">Total Planned Outages</div>
+                <div class="kpi-value">{len(fiveday_planned)}</div>
+                <div class="kpi-subtext">🔴 Active: {active_5p} &nbsp;|&nbsp; 🟢 Closed: {closed_5p}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
     with kpi4:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Unplanned Outages</div><div class="kpi-value">{len(fiveday_unplanned)}</div></div>', unsafe_allow_html=True)
+        active_5u = len(fiveday_unplanned[fiveday_unplanned['Status_Calc'] == 'Active'])
+        closed_5u = len(fiveday_unplanned[fiveday_unplanned['Status_Calc'] == 'Closed'])
+        st.markdown(f'''
+            <div class="kpi-card">
+                <div class="kpi-title">Total Unplanned Outages</div>
+                <div class="kpi-value">{len(fiveday_unplanned)}</div>
+                <div class="kpi-subtext">🔴 Active: {active_5u} &nbsp;|&nbsp; 🟢 Closed: {closed_5u}</div>
+            </div>
+        ''', unsafe_allow_html=True)
 
     st.divider()
 
-    # Zone-wise Table (Restored to exact previous working state)
+    # Zone-wise Table
     st.subheader("Zone-wise Distribution (5 Days)")
     if not df_5day.empty:
         zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
