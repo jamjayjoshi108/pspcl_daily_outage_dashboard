@@ -4,9 +4,12 @@ import requests
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-import plotly.express as px
+
+# --- PAGE CONFIGURATION ---
+st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
 
 # --- IST TIMEZONE SETUP ---
+# Forces Streamlit to always use Indian Standard Time (UTC +5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
 
 # --- GITHUB TRIGGER LOGIC ---
@@ -37,6 +40,7 @@ if not os.path.exists(file_today) or not os.path.exists(file_5day):
     lock_file = "scraper_lock.txt"
     should_trigger = True
     
+    # Cooldown check: Prevent spamming GitHub if you refresh while waiting
     if os.path.exists(lock_file):
         # If the lock file is less than 5 minutes old, don't trigger again
         if time.time() - os.path.getmtime(lock_file) < 300: 
@@ -87,10 +91,6 @@ def load_data(f_today, f_5day):
     return df_today, df_5day
 
 df_today, df_5day = load_data(file_today, file_5day)
-
-# Colors based on your uploaded image legend
-COLOR_PLANNED = "#ea4335" 
-COLOR_UNPLANNED = "#45a29e" 
 
 st.title("⚡ Power Outage Monitoring Dashboard")
 
