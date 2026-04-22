@@ -462,8 +462,6 @@ if not combined_circle.empty:
 else:
     st.info("No circle data available.")
 
-
-
 # import os
 # import time
 # import requests
