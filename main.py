@@ -1,46 +1,69 @@
+import os
+import time
+import requests
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import datetime
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Power Outage Operations Dashboard", layout="wide")
+# --- GITHUB TRIGGER LOGIC ---
+def trigger_scraper():
+    # REPLACE THESE TWO LINES WITH YOUR ACTUAL DETAILS
+    repo_owner = "your_github_username"
+    repo_name = "your_repository_name" 
+    
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/daily_scrape.yml/dispatches"
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"token {st.secrets['GITHUB_TOKEN']}"
+    }
+    requests.post(url, headers=headers, json={"ref": "main"})
 
-# --- CUSTOM CSS FOR COLORS ---
-st.markdown("""
-    <style>
-    /* Styling to match your red/teal color theme */
-    div[data-testid="stMetricValue"] { font-size: 1.8rem; }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- DATA LOADING & CLEANING ---
-@st.cache_data
+# --- DATA LOADING ---
+@st.cache_data(ttl="1m") # Checks for new data every minute
 def load_data():
     today_str = datetime.now().strftime("%Y-%m-%d")
+    file_today = f"{today_str}_Outages_Today.csv"
+    file_5day = f"{today_str}_Outages_Last_5_Days.csv"
     
-    # Load files dynamically based on today's date
-    try:
-        df_today = pd.read_csv(f"{today_str}_Outages_Today.csv")
-        df_5day = pd.read_csv(f"{today_str}_Outages_Last_5_Days.csv")
-    except FileNotFoundError:
-        st.error("Data files for today not found. Please ensure the scraper has run.")
+    # Check if today's files exist
+    if not os.path.exists(file_today) or not os.path.exists(file_5day):
+        lock_file = "scraper_lock.txt"
+        should_trigger = True
+        
+        # Cooldown check: Prevent spamming GitHub if you refresh while waiting
+        if os.path.exists(lock_file):
+            # If the lock file is less than 5 minutes old, don't trigger again
+            if time.time() - os.path.getmtime(lock_file) < 300: 
+                should_trigger = False
+                
+        if should_trigger:
+            trigger_scraper()
+            # Create the lock file to start the 5-minute cooldown
+            with open(lock_file, "w") as f:
+                f.write(str(time.time()))
+            st.warning(f"⚠️ Data for {today_str} is missing. Automatically fetching fresh data from PSPCL...")
+            st.info("⏳ Please wait ~2 minutes and refresh this page.")
+        else:
+            st.info("⏳ The scraper is currently running in the background. Please wait a moment and refresh.")
+            
+        # Stop loading so we don't show old data
         st.stop()
+        
+    # If files exist, load them normally
+    df_today = pd.read_csv(file_today)
+    df_5day = pd.read_csv(file_5day)
     
     # Map outage types
     df_today['Type of Outage'] = df_today['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
     df_5day['Type of Outage'] = df_5day['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
     
-    # Convert time columns
+    # Convert time columns and assign buckets
     time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
     for df in [df_today, df_5day]:
         for col in time_cols:
             df[col] = pd.to_datetime(df[col], errors='coerce')
-            
-        # Determine Status (Active if End Time is NaT)
         df['Status_Calc'] = df['End Time'].apply(lambda x: 'Active' if pd.isna(x) else 'Closed')
         
-        # Create Time Buckets
         def assign_bucket(mins):
             if pd.isna(mins) or mins < 0: return "Active/Unknown"
             hrs = mins / 60
