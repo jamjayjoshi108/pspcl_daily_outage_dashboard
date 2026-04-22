@@ -454,7 +454,9 @@ if not combined_circle.empty:
             if not feeder_list_fp.empty:
                 feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
                 feeder_list_fp = feeder_list_fp[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
-                styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1)
+                
+                # Apply highlight AND format the float column
+                styled_fp = feeder_list_fp.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'})
                 st.dataframe(styled_fp, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']), use_container_width=True, hide_index=True)
@@ -465,10 +467,13 @@ if not combined_circle.empty:
             if not feeder_list_fu.empty:
                 feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
                 feeder_list_fu = feeder_list_fu[['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']]
-                styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1)
+                
+                # Apply highlight AND format the float column
+                styled_fu = feeder_list_fu.style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'})
                 st.dataframe(styled_fu, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(pd.DataFrame(columns=['Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']), use_container_width=True, hide_index=True)
+            
 else:
     st.info("No circle data available.")
 
