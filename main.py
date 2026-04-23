@@ -9,8 +9,6 @@ import requests
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-import pydeck as pdk
-import numpy as np
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
@@ -54,32 +52,11 @@ st.markdown("""
         
         .status-badge { background-color: rgba(0, 0, 0, 0.25); padding: 3px 8px; border-radius: 4px; font-weight: 500; color: #FFFFFF !important; }
         [data-testid="stDataFrame"] > div { border: 2px solid #004085 !important; border-radius: 6px; overflow: hidden; }
-        
-        /* Floating Map Button */
-        .floating-btn-container {
-            position: fixed;
-            top: 2rem;
-            right: 2rem;
-            z-index: 99999;
-        }
-        /* Blur class for the main dashboard */
-        .blur-background {
-            filter: blur(8px) brightness(0.8);
-            pointer-events: none;
-            transition: filter 0.3s ease;
-        }
     </style>
 """, unsafe_allow_html=True)
 
 # --- IST TIMEZONE SETUP ---
 IST = timezone(timedelta(hours=5, minutes=30))
-
-# --- MAP OVERLAY STATE ---
-if 'show_map_overlay' not in st.session_state:
-    st.session_state.show_map_overlay = True
-
-def toggle_map():
-    st.session_state.show_map_overlay = not st.session_state.show_map_overlay
 
 # --- GITHUB TRIGGER LOGIC ---
 def trigger_scraper():
@@ -255,108 +232,7 @@ feeder_stats = feeder_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
 notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
 top_5_notorious = notorious.groupby('Circle').head(5)
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
-# --- CIRCLE COORDINATE MAPPING ---
-# Replace these keys with the EXACT string names found in your df_today['Circle']
-CIRCLE_COORDS = {
-    "Amritsar": {"lat": 31.6340, "lon": 74.8723},
-    "Ludhiana": {"lat": 30.9010, "lon": 75.8573},
-    "Patiala": {"lat": 30.3398, "lon": 76.3869},
-    "Jalandhar": {"lat": 31.3260, "lon": 75.5762},
-    "Bathinda": {"lat": 30.2110, "lon": 74.9455},
-    "Mohali": {"lat": 30.7046, "lon": 76.7179},
-    "HOSHIARPUR": {"lat": 31.5300, "lon": 75.9200},
-    "TARN TARAN": {"lat": 31.4500, "lon": 74.9300},
-    "SUB URBAN AMRITSAR": {"lat": 31.6300, "lon": 74.8700},
-    "GURDASPUR": {"lat": 32.0400, "lon": 75.4000},
-    "MOHALI": {"lat": 30.7046, "lon": 76.7179},
-    "ROPAR": {"lat": 30.9700, "lon": 76.5300},
-    "Zirakpur": {"lat": 30.6400, "lon": 76.8200},
-    "PATIALA": {"lat": 30.3400, "lon": 76.3800},
-    "KAPURTHALA": {"lat": 31.3800, "lon": 75.3800},
-    "SANGRUR": {"lat": 30.2400, "lon": 75.8400},
-    "JALANDHAR": {"lat": 31.3300, "lon": 75.5800},
-    "FEROZPUR": {"lat": 30.9300, "lon": 74.6100},
-    "NAWANSHAHR": {"lat": 31.1300, "lon": 76.1200},
-    "FARIDKOT": {"lat": 30.6800, "lon": 74.7600},
-    "MUKATSAR": {"lat": 30.4800, "lon": 74.5200},
-    "BARNALA": {"lat": 30.3800, "lon": 75.5500},
-    "SUB URBAN LUDHIANA": {"lat": 30.9000, "lon": 75.8600},
-    "CITY WEST LUDHIANA": {"lat": 30.9000, "lon": 75.8600},
-    "CITY AMRITSAR": {"lat": 31.6300, "lon": 74.8700},
-    "KHANNA": {"lat": 30.7000, "lon": 76.2200},
-    "CITY EAST LUDHIANA": {"lat": 30.9000, "lon": 75.8600}
-}
-    
-# --- DYNAMIC PUNJAB MAP OVERLAY ---
-# 1. The Floating Button
-st.markdown('<div class="floating-btn-container">', unsafe_allow_html=True)
-if st.button("🗺️ Toggle Map", on_click=toggle_map, type="primary"):
-    pass
-st.markdown('</div>', unsafe_allow_html=True)
 
-# 2. The Map Logic
-if st.session_state.show_map_overlay:
-    st.markdown("<h2 style='text-align: center; color: #004085; padding-top: 2rem;'>Live Outage Heatmap - Punjab</h2>", unsafe_allow_html=True)
-    
-    # --- PREPARE REAL DATA ---
-    if not df_today.empty:
-        # Group by Circle to get total outage duration
-        map_df = df_today.groupby('Circle')['Diff in mins'].sum().reset_index()
-        map_df.rename(columns={'Diff in mins': 'Total_Outage_Mins'}, inplace=True)
-        
-        try:
-            # Load the shapes of the Punjab districts
-            with open("punjab_boundaries.geojson", "r") as f:
-                punjab_geojson = json.load(f)
-                
-            # --- RENDER FLAT CHOROPLETH MAP ---
-            fig = px.choropleth(
-                map_df,
-                geojson=punjab_geojson,
-                locations='Circle',                  # Column in your df
-                featureidkey='properties.district',  # Key in the GeoJSON that matches your Circle names
-                color='Total_Outage_Mins',
-                color_continuous_scale="Greens",     # Matches the green vibe of your uploaded image
-                projection="mercator"
-            )
-            
-            # This hides the Earth/Ocean background and zooms exactly onto Punjab
-            fig.update_geos(fitbounds="locations", visible=False)
-            fig.update_layout(
-                margin={"r":0,"t":0,"l":0,"b":0},
-                paper_bgcolor="rgba(0,0,0,0)", # Transparent background
-                plot_bgcolor="rgba(0,0,0,0)"
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-        except FileNotFoundError:
-            st.error("⚠️ To draw the specific region borders, please place a 'punjab_boundaries.geojson' file in your project folder.")
-    else:
-        st.info("No outage data available today to map.")
-        
-    # --- END OF MAP ---
-    
-    # The big obvious button to dismiss the map
-    st.write("") # Spacer
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("Enter Dashboard View ➔", use_container_width=True, on_click=toggle_map):
-            pass
-            
-    st.divider()
-    
-    # Inject CSS to blur the rest of the app below this point
-    st.markdown("""
-        <style>
-            div[data-testid="stMainBlockContainer"] > div:nth-child(n+4) { 
-                filter: blur(8px) brightness(0.8);
-                pointer-events: none;
-                user-select: none;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-    
 
 # --- MAIN DASHBOARD RENDER ---
 st.title("⚡ Power Outage Monitoring Dashboard")
@@ -630,7 +506,6 @@ with tab1:
                     st.dataframe(feeder_list_fu[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']].style.apply(highlight_notorious, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
                 else: st.dataframe(pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']).style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
     else: st.info("No circle data available.")
-
 
 
 # #  =======================================================================================================================================
