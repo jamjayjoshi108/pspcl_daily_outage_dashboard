@@ -43,11 +43,14 @@ jobs:
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
           git add *_Outages_*.csv *_PTW_*.csv archive/*
-          git commit -m "Automated daily data update and archive" || exit 0
           
-          # 👉 THE FIX: Pull any new changes made by you before pushing the CSVs
+          # 1. Make the commit
+          git commit -m "Automated daily data update and archive" || echo "No changes"
+          
+          # 2. PULL your manual updates from GitHub to sync the bot's files
           git pull --rebase origin main
           
+          # 3. PUSH everything back together
           git push
 
 
