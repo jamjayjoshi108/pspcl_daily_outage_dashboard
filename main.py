@@ -216,6 +216,8 @@ notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
 # # --- MAIN DASHBOARD RENDER ---
 # st.title("⚡ Power Outage Monitoring Dashboard")
 # tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📈 YoY Comparison", "🛠️ PTW Frequency"])
+
+
 # --- MAIN DASHBOARD RENDER ---
 header_col1, header_col2 = st.columns([0.85, 0.15])
 
@@ -223,13 +225,16 @@ with header_col1:
     st.title("⚡ Power Outage Monitoring Dashboard")
 
 with header_col2:
-    st.write("") # Adds a slight vertical spacer to align the button with the title text
+    st.write("") 
     if st.button("🔄 Refresh Data", type="primary", use_container_width=True):
         if trigger_scraper():
-            # Update the lock file so the automated check doesn't double-trigger
             with open("scraper_lock.txt", "w") as f:
                 f.write(str(time.time()))
-            st.info("⏳ Cloud scraper started. Please wait ~10 minutes and refresh the page.")
+            st.info("⏳ Cloud scraper started. Please wait ~2 minutes and refresh the page.")
+
+# 👉 THIS IS THE CRITICAL LINE THAT WENT MISSING:
+tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📈 YoY Comparison", "🛠️ PTW Frequency"])
+
 
 # ==========================================
 # TAB 3: PTW FREQUENCY
