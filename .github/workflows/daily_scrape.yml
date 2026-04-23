@@ -37,15 +37,17 @@ jobs:
       - name: Archive, Commit and Push New CSVs
         run: |
           mkdir -p archive
-          # Copy BOTH Outages and PTW files to the archive folder
           cp *_Outages_*.csv *_PTW_*.csv archive/ || true
           
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # Add BOTH file types to the commit
           git add *_Outages_*.csv *_PTW_*.csv archive/*
           git commit -m "Automated daily data update and archive" || exit 0
+          
+          # 👉 THE FIX: Pull any new changes made by you before pushing the CSVs
+          git pull --rebase origin main
+          
           git push
 
 
