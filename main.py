@@ -9,6 +9,8 @@ import requests
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+import pydeck as pdk
+import numpy as np
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Power Outage Monitoring Dashboard", layout="wide")
@@ -253,7 +255,18 @@ feeder_stats = feeder_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
 notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
 top_5_notorious = notorious.groupby('Circle').head(5)
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
-
+# --- CIRCLE COORDINATE MAPPING ---
+# Replace these keys with the EXACT string names found in your df_today['Circle']
+CIRCLE_COORDS = {
+    "Amritsar": {"lat": 31.6340, "lon": 74.8723},
+    "Ludhiana": {"lat": 30.9010, "lon": 75.8573},
+    "Patiala": {"lat": 30.3398, "lon": 76.3869},
+    "Jalandhar": {"lat": 31.3260, "lon": 75.5762},
+    "Bathinda": {"lat": 30.2110, "lon": 74.9455},
+    "Mohali": {"lat": 30.7046, "lon": 76.7179},
+    # ... add the rest of your circles here
+}
+    
 # --- DYNAMIC PUNJAB MAP OVERLAY ---
 # 1. The Floating Button
 st.markdown('<div class="floating-btn-container">', unsafe_allow_html=True)
@@ -263,11 +276,50 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # 2. The Map Logic
 if st.session_state.show_map_overlay:
-    # --- PUT YOUR HIGH-END PYDECK/PLOTLY MAP HERE ---
-    st.markdown("<h2 style='text-align: center; color: #004085;'>Live Outage Heatmap - Punjab</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #004085; padding-top: 2rem;'>Live Outage Heatmap - Punjab</h2>", unsafe_allow_html=True)
     
-    # Placeholder for your state-of-the-art map implementation
-    st.info("🗺️ State-of-the-art dynamic Punjab map will render here. (Use PyDeck or Plotly)")
+    # --- PREPARE REAL DATA ---
+    if not df_today.empty:
+        # Group by Circle to get total outage duration (or count) for the heatmap weight
+        map_df = df_today.groupby('Circle')['Diff in mins'].sum().reset_index()
+        map_df.rename(columns={'Diff in mins': 'Total_Outage_Mins'}, inplace=True)
+        
+        # Map the coordinates
+        map_df['lat'] = map_df['Circle'].map(lambda x: CIRCLE_COORDS.get(x, {}).get('lat', None))
+        map_df['lon'] = map_df['Circle'].map(lambda x: CIRCLE_COORDS.get(x, {}).get('lon', None))
+        
+        # Drop any circles that don't have coordinates in the dictionary yet
+        map_df = map_df.dropna(subset=['lat', 'lon'])
+        
+        if not map_df.empty:
+            # --- RENDER PYDECK 3D MAP ---
+            layer = pdk.Layer(
+                "ColumnLayer", # ColumnLayer is better than HexagonLayer for specific city points
+                data=map_df,
+                get_position="[lon, lat]",
+                get_elevation="Total_Outage_Mins",
+                elevation_scale=10, 
+                radius=6000, 
+                pickable=True,
+                extruded=True,
+                get_fill_color=[240, 59, 32, 200], # Red columns
+            )
+
+            view_state = pdk.ViewState(latitude=31.14, longitude=75.34, zoom=6.5, pitch=45, bearing=-10)
+
+            st.pydeck_chart(pdk.Deck(
+                initial_view_state=view_state,
+                layers=[layer],
+                tooltip={"text": "{Circle}\nTotal Outage: {Total_Outage_Mins} mins"}
+            ))
+        else:
+            st.warning("Map data is missing coordinate mappings for current circles.")
+    else:
+        st.info("No outage data available today to map.")
+        
+    # --- END OF MAP ---
+
+    # (Keep your "Enter Dashboard View" button and blur CSS below this exactly as previously provided)
     
     # A big, obvious button to dismiss the map (safest Streamlit alternative to background-clicking)
     col1, col2, col3 = st.columns([1, 1, 1])
