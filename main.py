@@ -264,7 +264,27 @@ CIRCLE_COORDS = {
     "Jalandhar": {"lat": 31.3260, "lon": 75.5762},
     "Bathinda": {"lat": 30.2110, "lon": 74.9455},
     "Mohali": {"lat": 30.7046, "lon": 76.7179},
-    # ... add the rest of your circles here
+    "HOSHIARPUR": {"lat": 31.5300, "lon": 75.9200},
+    "TARN TARAN": {"lat": 31.4500, "lon": 74.9300},
+    "SUB URBAN AMRITSAR": {"lat": 31.6300, "lon": 74.8700},
+    "GURDASPUR": {"lat": 32.0400, "lon": 75.4000},
+    "MOHALI": {"lat": 30.7046, "lon": 76.7179},
+    "ROPAR": {"lat": 30.9700, "lon": 76.5300},
+    "Zirakpur": {"lat": 30.6400, "lon": 76.8200},
+    "PATIALA": {"lat": 30.3400, "lon": 76.3800},
+    "KAPURTHALA": {"lat": 31.3800, "lon": 75.3800},
+    "SANGRUR": {"lat": 30.2400, "lon": 75.8400},
+    "JALANDHAR": {"lat": 31.3300, "lon": 75.5800},
+    "FEROZPUR": {"lat": 30.9300, "lon": 74.6100},
+    "NAWANSHAHR": {"lat": 31.1300, "lon": 76.1200},
+    "FARIDKOT": {"lat": 30.6800, "lon": 74.7600},
+    "MUKATSAR": {"lat": 30.4800, "lon": 74.5200},
+    "BARNALA": {"lat": 30.3800, "lon": 75.5500},
+    "SUB URBAN LUDHIANA": {"lat": 30.9000, "lon": 75.8600},
+    "CITY WEST LUDHIANA": {"lat": 30.9000, "lon": 75.8600},
+    "CITY AMRITSAR": {"lat": 31.6300, "lon": 74.8700},
+    "KHANNA": {"lat": 30.7000, "lon": 76.2200},
+    "CITY EAST LUDHIANA": {"lat": 30.9000, "lon": 75.8600}
 }
     
 # --- DYNAMIC PUNJAB MAP OVERLAY ---
