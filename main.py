@@ -273,11 +273,22 @@ with tab3:
             
             if start_col_ptw and end_col_ptw:
                 today_ptws = ptw_clean.copy()
-                today_ptws[start_col_ptw] = pd.to_datetime(today_ptws[start_col_ptw], errors='coerce')
-                today_ptws[end_col_ptw] = pd.to_datetime(today_ptws[end_col_ptw], errors='coerce')
                 
-                # Filter for records starting today
-                today_ptws = today_ptws[today_ptws[start_col_ptw].dt.date == pd.to_datetime(today_str).date()]
+                # FORCE dayfirst=True for Indian date formats to prevent bad filtering
+                today_ptws[start_col_ptw] = pd.to_datetime(today_ptws[start_col_ptw], dayfirst=True, errors='coerce')
+                today_ptws[end_col_ptw] = pd.to_datetime(today_ptws[end_col_ptw], dayfirst=True, errors='coerce')
+                
+                # Check if there is a 'Request Date' column to be safe
+                req_date_col = next((c for c in df_ptw.columns if 'request' in c.lower() and ('date' in c.lower() or 'time' in c.lower())), None)
+                if req_date_col:
+                    today_ptws[req_date_col] = pd.to_datetime(today_ptws[req_date_col], dayfirst=True, errors='coerce')
+                    # Filter: Request Date is today OR Start Date is today
+                    mask = (today_ptws[start_col_ptw].dt.date == pd.to_datetime(today_str).date()) | \
+                           (today_ptws[req_date_col].dt.date == pd.to_datetime(today_str).date())
+                else:
+                    mask = (today_ptws[start_col_ptw].dt.date == pd.to_datetime(today_str).date())
+                
+                today_ptws = today_ptws[mask]
                 
                 if not today_ptws.empty:
                     # Calculate durations and buckets
@@ -300,16 +311,17 @@ with tab3:
                     
                     # Highlight logic for > 5 hours
                     def highlight_long_ptw(row):
-                        if row['Duration (Hours)'] > 5:
+                        if pd.notna(row['Duration (Hours)']) and row['Duration (Hours)'] > 5:
                             return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row)
                         return [''] * len(row)
                         
-                    over_5_count = len(final_today_ptws[final_today_ptws['Duration (Hours)'] > 5])
+                    # Calculate unique feeders exceeding 5 hours
+                    over_5_count = final_today_ptws[final_today_ptws['Duration (Hours)'] > 5][feeder_col].nunique()
                     st.markdown(f"**Total Feeders under PTW today exceeding 5 Hours:** `{over_5_count}`")
                     
                     st.dataframe(final_today_ptws.style.apply(highlight_long_ptw, axis=1).format({'Duration (Hours)': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
                 else:
-                    st.info("No PTW requests recorded starting today.")
+                    st.info("No PTW requests recorded specifically for today.")
             else:
                 st.warning("Could not dynamically identify Start and End time columns in the PTW report.")
 
@@ -542,11 +554,35 @@ with tab1:
         def highlight_long(row):
             return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row)
             
+        # 1A. Add Feeder Counts
+        total_long_feeders = long_planned['Feeder'].nunique()
+        st.markdown(f"**Total Feeders with Planned Outages > 5 Hours:** `{total_long_feeders}`")
+        
         st.dataframe(
             long_planned[cols_to_show].sort_values(by='Duration (Hours)', ascending=False).style.apply(highlight_long, axis=1).format({'Duration (Hours)': '{:.2f}'}).set_table_styles(HEADER_STYLES), 
             width="stretch", 
             hide_index=True
         )
+
+        # 1B. Add Zone-wise Summary Table
+        st.subheader("📍 Zone-wise Summary (> 5 Hrs Planned Outages)")
+        
+        zone_summary = long_planned.groupby('Zone').agg(
+            Total_Feeders=('Feeder', 'nunique'),
+            Total_Duration_Hours=('Duration (Hours)', 'sum')
+        ).reset_index()
+        
+        zone_summary.rename(columns={
+            'Total_Feeders': 'Total Feeders', 
+            'Total_Duration_Hours': 'Total Duration (Hours)'
+        }, inplace=True)
+        
+        st.dataframe(
+            zone_summary.style.format({'Total Duration (Hours)': '{:.2f}'}).set_table_styles(HEADER_STYLES), 
+            width="stretch", 
+            hide_index=True
+        )
+        
     else:
         st.success("No Planned Outages exceeded 5 hours today! 🎉")
 
