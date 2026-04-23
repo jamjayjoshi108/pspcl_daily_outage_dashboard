@@ -279,44 +279,42 @@ if st.session_state.show_map_overlay:
     st.markdown("<h2 style='text-align: center; color: #004085; padding-top: 2rem;'>Live Outage Heatmap - Punjab</h2>", unsafe_allow_html=True)
     
     # --- PREPARE REAL DATA ---
-    map_layers = [] # Default to an empty list of layers
-    
     if not df_today.empty:
         # Group by Circle to get total outage duration
         map_df = df_today.groupby('Circle')['Diff in mins'].sum().reset_index()
         map_df.rename(columns={'Diff in mins': 'Total_Outage_Mins'}, inplace=True)
         
-        # Map the coordinates (will return None if the circle isn't in CIRCLE_COORDS yet)
-        map_df['lat'] = map_df['Circle'].map(lambda x: CIRCLE_COORDS.get(x, {}).get('lat', None))
-        map_df['lon'] = map_df['Circle'].map(lambda x: CIRCLE_COORDS.get(x, {}).get('lon', None))
-        
-        # Silently drop any circles that don't have coordinates in the dictionary yet
-        map_df = map_df.dropna(subset=['lat', 'lon'])
-        
-        # If we have at least one valid mapped circle, build the 3D layer
-        if not map_df.empty:
-            layer = pdk.Layer(
-                "ColumnLayer",
-                data=map_df,
-                get_position="[lon, lat]",
-                get_elevation="Total_Outage_Mins",
-                elevation_scale=10, 
-                radius=6000, 
-                pickable=True,
-                extruded=True,
-                get_fill_color=[240, 59, 32, 200], 
+        try:
+            # Load the shapes of the Punjab districts
+            with open("punjab_boundaries.geojson", "r") as f:
+                punjab_geojson = json.load(f)
+                
+            # --- RENDER FLAT CHOROPLETH MAP ---
+            fig = px.choropleth(
+                map_df,
+                geojson=punjab_geojson,
+                locations='Circle',                  # Column in your df
+                featureidkey='properties.district',  # Key in the GeoJSON that matches your Circle names
+                color='Total_Outage_Mins',
+                color_continuous_scale="Greens",     # Matches the green vibe of your uploaded image
+                projection="mercator"
             )
-            map_layers.append(layer)
-
-    # --- RENDER PYDECK 3D MAP ---
-    # The map will always render. If map_layers is empty, it just shows the base map.
-    view_state = pdk.ViewState(latitude=31.14, longitude=75.34, zoom=6.5, pitch=45, bearing=-10)
-
-    st.pydeck_chart(pdk.Deck(
-        initial_view_state=view_state,
-        layers=map_layers,
-        tooltip={"text": "{Circle}\nTotal Outage: {Total_Outage_Mins} mins"}
-    ))
+            
+            # This hides the Earth/Ocean background and zooms exactly onto Punjab
+            fig.update_geos(fitbounds="locations", visible=False)
+            fig.update_layout(
+                margin={"r":0,"t":0,"l":0,"b":0},
+                paper_bgcolor="rgba(0,0,0,0)", # Transparent background
+                plot_bgcolor="rgba(0,0,0,0)"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+        except FileNotFoundError:
+            st.error("⚠️ To draw the specific region borders, please place a 'punjab_boundaries.geojson' file in your project folder.")
+    else:
+        st.info("No outage data available today to map.")
+        
     # --- END OF MAP ---
     
     # The big obvious button to dismiss the map
