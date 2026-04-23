@@ -219,7 +219,7 @@ notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
 
 
 # --- MAIN DASHBOARD RENDER ---
-header_col1, header_col2 = st.columns([0.8, 0.5])
+header_col1, header_col2 = st.columns([0.8, 1])
 
 with header_col1:
     st.title("⚡ Power Outage Monitoring Dashboard")
