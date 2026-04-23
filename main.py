@@ -279,22 +279,24 @@ if st.session_state.show_map_overlay:
     st.markdown("<h2 style='text-align: center; color: #004085; padding-top: 2rem;'>Live Outage Heatmap - Punjab</h2>", unsafe_allow_html=True)
     
     # --- PREPARE REAL DATA ---
+    map_layers = [] # Default to an empty list of layers
+    
     if not df_today.empty:
-        # Group by Circle to get total outage duration (or count) for the heatmap weight
+        # Group by Circle to get total outage duration
         map_df = df_today.groupby('Circle')['Diff in mins'].sum().reset_index()
         map_df.rename(columns={'Diff in mins': 'Total_Outage_Mins'}, inplace=True)
         
-        # Map the coordinates
+        # Map the coordinates (will return None if the circle isn't in CIRCLE_COORDS yet)
         map_df['lat'] = map_df['Circle'].map(lambda x: CIRCLE_COORDS.get(x, {}).get('lat', None))
         map_df['lon'] = map_df['Circle'].map(lambda x: CIRCLE_COORDS.get(x, {}).get('lon', None))
         
-        # Drop any circles that don't have coordinates in the dictionary yet
+        # Silently drop any circles that don't have coordinates in the dictionary yet
         map_df = map_df.dropna(subset=['lat', 'lon'])
         
+        # If we have at least one valid mapped circle, build the 3D layer
         if not map_df.empty:
-            # --- RENDER PYDECK 3D MAP ---
             layer = pdk.Layer(
-                "ColumnLayer", # ColumnLayer is better than HexagonLayer for specific city points
+                "ColumnLayer",
                 data=map_df,
                 get_position="[lon, lat]",
                 get_elevation="Total_Outage_Mins",
@@ -302,26 +304,23 @@ if st.session_state.show_map_overlay:
                 radius=6000, 
                 pickable=True,
                 extruded=True,
-                get_fill_color=[240, 59, 32, 200], # Red columns
+                get_fill_color=[240, 59, 32, 200], 
             )
+            map_layers.append(layer)
 
-            view_state = pdk.ViewState(latitude=31.14, longitude=75.34, zoom=6.5, pitch=45, bearing=-10)
+    # --- RENDER PYDECK 3D MAP ---
+    # The map will always render. If map_layers is empty, it just shows the base map.
+    view_state = pdk.ViewState(latitude=31.14, longitude=75.34, zoom=6.5, pitch=45, bearing=-10)
 
-            st.pydeck_chart(pdk.Deck(
-                initial_view_state=view_state,
-                layers=[layer],
-                tooltip={"text": "{Circle}\nTotal Outage: {Total_Outage_Mins} mins"}
-            ))
-        else:
-            st.warning("Map data is missing coordinate mappings for current circles.")
-    else:
-        st.info("No outage data available today to map.")
-        
+    st.pydeck_chart(pdk.Deck(
+        initial_view_state=view_state,
+        layers=map_layers,
+        tooltip={"text": "{Circle}\nTotal Outage: {Total_Outage_Mins} mins"}
+    ))
     # --- END OF MAP ---
-
-    # (Keep your "Enter Dashboard View" button and blur CSS below this exactly as previously provided)
     
-    # A big, obvious button to dismiss the map (safest Streamlit alternative to background-clicking)
+    # The big obvious button to dismiss the map
+    st.write("") # Spacer
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         if st.button("Enter Dashboard View ➔", use_container_width=True, on_click=toggle_map):
@@ -332,7 +331,7 @@ if st.session_state.show_map_overlay:
     # Inject CSS to blur the rest of the app below this point
     st.markdown("""
         <style>
-            div[data-testid="stMainBlockContainer"] > div:nth-child(n+3) { /* Adjust nth-child if needed based on layout */
+            div[data-testid="stMainBlockContainer"] > div:nth-child(n+4) { 
                 filter: blur(8px) brightness(0.8);
                 pointer-events: none;
                 user-select: none;
