@@ -230,7 +230,7 @@ with header_col2:
         if trigger_scraper():
             with open("scraper_lock.txt", "w") as f:
                 f.write(str(time.time()))
-            st.info("⏳ Cloud scraper started. Please wait ~2 minutes and refresh the page.")
+            st.info("⏳ Cloud scraper started. Please wait ~10 minutes and refresh the page.")
 
 # 👉 THIS IS THE CRITICAL LINE THAT WENT MISSING:
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📈 YoY Comparison", "🛠️ PTW Frequency"])
