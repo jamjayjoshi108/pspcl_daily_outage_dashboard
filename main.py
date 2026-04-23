@@ -52,11 +52,32 @@ st.markdown("""
         
         .status-badge { background-color: rgba(0, 0, 0, 0.25); padding: 3px 8px; border-radius: 4px; font-weight: 500; color: #FFFFFF !important; }
         [data-testid="stDataFrame"] > div { border: 2px solid #004085 !important; border-radius: 6px; overflow: hidden; }
+        
+        /* Floating Map Button */
+        .floating-btn-container {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            z-index: 99999;
+        }
+        /* Blur class for the main dashboard */
+        .blur-background {
+            filter: blur(8px) brightness(0.8);
+            pointer-events: none;
+            transition: filter 0.3s ease;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # --- IST TIMEZONE SETUP ---
 IST = timezone(timedelta(hours=5, minutes=30))
+
+# --- MAP OVERLAY STATE ---
+if 'show_map_overlay' not in st.session_state:
+    st.session_state.show_map_overlay = True
+
+def toggle_map():
+    st.session_state.show_map_overlay = not st.session_state.show_map_overlay
 
 # --- GITHUB TRIGGER LOGIC ---
 def trigger_scraper():
@@ -233,6 +254,40 @@ notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder']).sort_values(b
 top_5_notorious = notorious.groupby('Circle').head(5)
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
 
+# --- DYNAMIC PUNJAB MAP OVERLAY ---
+# 1. The Floating Button
+st.markdown('<div class="floating-btn-container">', unsafe_allow_html=True)
+if st.button("🗺️ Toggle Map", on_click=toggle_map, type="primary"):
+    pass
+st.markdown('</div>', unsafe_allow_html=True)
+
+# 2. The Map Logic
+if st.session_state.show_map_overlay:
+    # --- PUT YOUR HIGH-END PYDECK/PLOTLY MAP HERE ---
+    st.markdown("<h2 style='text-align: center; color: #004085;'>Live Outage Heatmap - Punjab</h2>", unsafe_allow_html=True)
+    
+    # Placeholder for your state-of-the-art map implementation
+    st.info("🗺️ State-of-the-art dynamic Punjab map will render here. (Use PyDeck or Plotly)")
+    
+    # A big, obvious button to dismiss the map (safest Streamlit alternative to background-clicking)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("Enter Dashboard View ➔", use_container_width=True, on_click=toggle_map):
+            pass
+            
+    st.divider()
+    
+    # Inject CSS to blur the rest of the app below this point
+    st.markdown("""
+        <style>
+            div[data-testid="stMainBlockContainer"] > div:nth-child(n+3) { /* Adjust nth-child if needed based on layout */
+                filter: blur(8px) brightness(0.8);
+                pointer-events: none;
+                user-select: none;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
 
 # --- MAIN DASHBOARD RENDER ---
 st.title("⚡ Power Outage Monitoring Dashboard")
