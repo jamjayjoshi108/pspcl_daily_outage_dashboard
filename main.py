@@ -733,7 +733,6 @@ def load_live_data(f_today, f_5day, f_ptw):
     df_5day = pd.read_csv(f_5day)
     df_ptw = pd.read_csv(f_ptw)
     
-    # Remove cancelled states to ensure accurate counts
     df_today = df_today[~df_today['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
     df_5day = df_5day[~df_5day['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
     
@@ -767,10 +766,8 @@ df_hist_curr, df_hist_ly = load_historical_data()
 
 # --- HELPER FUNCTIONS ---
 def generate_yoy_dist_expanded(df_curr, df_ly, group_col):
-    """Generates deep YoY stats including Counts, Total Hours, and Avg Hours"""
     def _agg(df, prefix):
-        if df.empty:
-            return pd.DataFrame({group_col: []}).set_index(group_col)
+        if df.empty: return pd.DataFrame({group_col: []}).set_index(group_col)
         df['Diff in mins'] = pd.to_numeric(df['Diff in mins'], errors='coerce').fillna(0)
         g = df.groupby([group_col, 'Type of Outage']).agg(
             Count=('Type of Outage', 'size'),
@@ -806,35 +803,59 @@ def generate_yoy_dist_expanded(df_curr, df_ly, group_col):
                   'Curr Unplanned Outage (Count)', 'Curr Unplanned Outage (TotalHrs)', 'Curr Unplanned Outage (AvgHrs)',
                   'LY Unplanned Outage (Count)', 'LY Unplanned Outage (TotalHrs)', 'LY Unplanned Outage (AvgHrs)',
                   'Curr Total (Count)', 'LY Total (Count)', 'YoY Delta (Total)']
-    # Filter to only expected columns that actually exist to avoid key errors
     cols_order = [c for c in cols_order if c in merged.columns]
-    return merged[cols_order]
+    merged = merged[cols_order]
+
+    # Add Grand Total Row logically
+    if not merged.empty:
+        gt_row = pd.Series(index=cols_order, dtype=object)
+        gt_row[group_col] = 'Grand Total'
+        for col in cols_order:
+            if col == group_col: continue
+            if '(Count)' in col or 'Delta' in col or '(TotalHrs)' in col:
+                gt_row[col] = merged[col].sum()
+        
+        # Correctly recalculate Averages for the Grand Total row
+        for prefix in ['Curr', 'LY']:
+            for outage in ['Planned Outage', 'Unplanned Outage']:
+                count_col = f"{prefix} {outage} (Count)"
+                tot_col = f"{prefix} {outage} (TotalHrs)"
+                avg_col = f"{prefix} {outage} (AvgHrs)"
+                if count_col in cols_order and tot_col in cols_order and avg_col in cols_order:
+                    gt_row[avg_col] = round(gt_row[tot_col] / gt_row[count_col], 2) if gt_row[count_col] > 0 else 0
+        
+        merged = pd.concat([merged, pd.DataFrame([gt_row])], ignore_index=True)
+
+    return merged
 
 def apply_pu_gradient(styler, df):
-    """Applies conditional background gradients based on Outage Type"""
     p_cols = [c for c in df.columns if 'Planned' in str(c) and pd.api.types.is_numeric_dtype(df[c])]
     u_cols = [c for c in df.columns if 'Unplanned' in str(c) and pd.api.types.is_numeric_dtype(df[c])]
     pc_cols = [c for c in df.columns if 'Power Off By PC' in str(c) and pd.api.types.is_numeric_dtype(df[c])]
     
-    if p_cols: styler = styler.background_gradient(subset=p_cols, cmap='Blues', vmin=0)
-    if pc_cols: styler = styler.background_gradient(subset=pc_cols, cmap='Purples', vmin=0)
-    if u_cols: styler = styler.background_gradient(subset=u_cols, cmap='Reds', vmin=0)
+    # Safely isolate the Grand Total row to exclude it from background gradients
+    if 'Grand Total' in df.index:
+        row_idx = df.index.drop('Grand Total')
+    else:
+        try:
+            group_col = df.columns[0]
+            if not df.empty and df.iloc[-1][group_col] == 'Grand Total':
+                row_idx = df.index[:-1]
+            else:
+                row_idx = df.index
+        except:
+            row_idx = df.index
+            
+    if p_cols: styler = styler.background_gradient(subset=pd.IndexSlice[row_idx, p_cols], cmap='Blues', vmin=0)
+    if pc_cols: styler = styler.background_gradient(subset=pd.IndexSlice[row_idx, pc_cols], cmap='Purples', vmin=0)
+    if u_cols: styler = styler.background_gradient(subset=pd.IndexSlice[row_idx, u_cols], cmap='Reds', vmin=0)
     return styler
 
 def highlight_delta(val):
-    if isinstance(val, int):
+    if isinstance(val, (int, float)):
         if val > 0: return 'color: #D32F2F; font-weight: bold;'
         elif val < 0: return 'color: #388E3C; font-weight: bold;'
     return ''
-
-def generate_yoy_kpi_html(title, current_val, delta_val):
-    delta_str, delta_color = (f"⬆ +{delta_val}", "#FF8A80") if delta_val > 0 else (f"⬇ {delta_val}", "#69F0AE") if delta_val < 0 else ("➖ 0", "#FFFFFF")
-    return f'''
-        <div class="kpi-card">
-            <div><div class="kpi-title">{title}</div><div class="kpi-value">{current_val}</div></div>
-            <div class="kpi-subtext"><span class="status-badge" style="color: {delta_color} !important; font-weight: bold;">{delta_str} vs Last Year</span></div>
-        </div>
-    '''
 
 def create_bucket_pivot(df, bucket_order):
     if df.empty: return pd.DataFrame(columns=bucket_order + ['Total'])
@@ -842,6 +863,7 @@ def create_bucket_pivot(df, bucket_order):
     pivot = pivot.reindex(columns=[c for c in bucket_order if c in pivot.columns], fill_value=0)
     pivot['Total'] = pivot.sum(axis=1)
     return pivot
+
 
 # --- NOTORIOUS FEEDERS CALCULATION (Tab 1) ---
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
@@ -898,9 +920,16 @@ with tab3:
             repeat_feeders = ptw_counts[ptw_counts['Unique_PTWs'] >= 2].sort_values(by='Unique_PTWs', ascending=False)
             repeat_feeders = repeat_feeders.rename(columns={'Unique_PTWs': 'PTW Request Count', 'PTW_IDs': 'Associated PTW Request Numbers'})
 
+            # Add Grand Total Row
+            if not repeat_feeders.empty:
+                gt_row = pd.Series({c: '' for c in repeat_feeders.columns})
+                gt_row[repeat_feeders.columns[0]] = 'Grand Total'
+                gt_row['PTW Request Count'] = repeat_feeders['PTW Request Count'].sum()
+                repeat_feeders = pd.concat([repeat_feeders, pd.DataFrame([gt_row])], ignore_index=True)
+
             kpi1, kpi2 = st.columns(2)
             with kpi1: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Total Active PTW Requests</div><div class="kpi-value">{df_ptw[ptw_col].nunique()}</div></div><div class="kpi-subtext"><span class="status-badge">Last 7 Days</span></div></div>', unsafe_allow_html=True)
-            with kpi2: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Feeders with Multiple PTWs</div><div class="kpi-value">{len(repeat_feeders)}</div></div><div class="kpi-subtext"><span class="status-badge" style="background-color: #D32F2F;">🔴 Needs Review</span></div></div>', unsafe_allow_html=True)
+            with kpi2: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Feeders with Multiple PTWs</div><div class="kpi-value">{len(repeat_feeders) - 1}</div></div><div class="kpi-subtext"><span class="status-badge" style="background-color: #D32F2F;">🔴 Needs Review</span></div></div>', unsafe_allow_html=True) # subtracted 1 for GT row
 
             st.divider()
             st.subheader("⚠️ Repeat PTW Feeders Detail View")
@@ -951,28 +980,31 @@ with tab2:
         if len(zone_selection.selection.rows) > 0:
             selected_zone = yoy_zone.iloc[zone_selection.selection.rows[0]]['Zone']
             
-            st.markdown(f"### 🎯 2. Circle-wise Distribution for **{selected_zone}**")
-            st.caption("Click any row to drill down into Feeder-wise data.")
-            
-            curr_zone_df = filtered_curr[filtered_curr['Zone'] == selected_zone]
-            ly_zone_df = filtered_ly[filtered_ly['Zone'] == selected_zone]
-            
-            yoy_circle = generate_yoy_dist_expanded(curr_zone_df, ly_zone_df, 'Circle')
-            
-            circle_selection = st.dataframe(
-                yoy_circle.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), 
-                width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row"
-            )
+            if selected_zone != 'Grand Total':
+                st.markdown(f"### 🎯 2. Circle-wise Distribution for **{selected_zone}**")
+                st.caption("Click any row to drill down into Feeder-wise data.")
+                
+                curr_zone_df = filtered_curr[filtered_curr['Zone'] == selected_zone]
+                ly_zone_df = filtered_ly[filtered_ly['Zone'] == selected_zone]
+                
+                yoy_circle = generate_yoy_dist_expanded(curr_zone_df, ly_zone_df, 'Circle')
+                
+                circle_selection = st.dataframe(
+                    yoy_circle.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), 
+                    width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row"
+                )
 
-            if len(circle_selection.selection.rows) > 0:
-                selected_circle = yoy_circle.iloc[circle_selection.selection.rows[0]]['Circle']
-                st.markdown(f"### 🔌 3. Feeder-wise Distribution for **{selected_circle}**")
-                
-                curr_circle_df = curr_zone_df[curr_zone_df['Circle'] == selected_circle]
-                ly_circle_df = ly_zone_df[ly_zone_df['Circle'] == selected_circle]
-                
-                yoy_feeder = generate_yoy_dist_expanded(curr_circle_df, ly_circle_df, 'Feeder')
-                st.dataframe(yoy_feeder.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                if len(circle_selection.selection.rows) > 0:
+                    selected_circle = yoy_circle.iloc[circle_selection.selection.rows[0]]['Circle']
+                    
+                    if selected_circle != 'Grand Total':
+                        st.markdown(f"### 🔌 3. Feeder-wise Distribution for **{selected_circle}**")
+                        
+                        curr_circle_df = curr_zone_df[curr_zone_df['Circle'] == selected_circle]
+                        ly_circle_df = ly_zone_df[ly_zone_df['Circle'] == selected_circle]
+                        
+                        yoy_feeder = generate_yoy_dist_expanded(curr_circle_df, ly_circle_df, 'Feeder')
+                        st.dataframe(yoy_feeder.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
 
 
 # ==========================================
@@ -1005,9 +1037,15 @@ with tab1:
             zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
             for col in ['Planned Outage', 'Power Off By PC', 'Unplanned Outage']:
                 if col not in zone_today: zone_today[col] = 0
+            
+            # Horizontal Overall Total
             zone_today['Total'] = zone_today['Planned Outage'] + zone_today['Power Off By PC'] + zone_today['Unplanned Outage']
             
-            # Apply heat-map gradient styling
+            # Vertical Grand Total
+            gt_row = pd.Series(zone_today.sum(numeric_only=True), name='Grand Total')
+            gt_row['Zone'] = 'Grand Total'
+            zone_today = pd.concat([zone_today, pd.DataFrame([gt_row])], ignore_index=True)
+            
             styled_zone_today = apply_pu_gradient(zone_today.style, zone_today).set_table_styles(HEADER_STYLES)
             st.dataframe(styled_zone_today, width="stretch", hide_index=True)
         else: st.info("No data available for today.")
@@ -1030,9 +1068,15 @@ with tab1:
             zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
             for col in ['Planned Outage', 'Power Off By PC', 'Unplanned Outage']:
                 if col not in zone_5day: zone_5day[col] = 0
+            
+            # Horizontal Overall Total
             zone_5day['Total'] = zone_5day['Planned Outage'] + zone_5day['Power Off By PC'] + zone_5day['Unplanned Outage']
             
-            # Apply heat-map gradient styling
+            # Vertical Grand Total
+            gt_row_5d = pd.Series(zone_5day.sum(numeric_only=True), name='Grand Total')
+            gt_row_5d['Zone'] = 'Grand Total'
+            zone_5day = pd.concat([zone_5day, pd.DataFrame([gt_row_5d])], ignore_index=True)
+            
             styled_zone_5day = apply_pu_gradient(zone_5day.style, zone_5day).set_table_styles(HEADER_STYLES)
             st.dataframe(styled_zone_5day, width="stretch", hide_index=True)
         else: st.info("No data available for the last 5 days.")
@@ -1069,7 +1113,7 @@ with tab1:
         else: st.info(f"No notorious feeders identified for {selected_notorious_type}.")
     else: st.info("No data available for the selected outage type.")
 
-    st.divider()
+
     st.divider()
     st.header("Comprehensive Circle-wise Breakdown")
     bucket_order = ["Up to 2 Hrs", "2-4 Hrs", "4-8 Hrs", "Above 8 Hrs", "Active/Unknown"]
@@ -1089,6 +1133,11 @@ with tab1:
     ).fillna(0).astype(int)
 
     if not today_circle.empty:
+        # 1. Add horizontal 'Overall Total'
+        today_circle[('Overall Total', 'Total Events')] = today_circle.loc[:, (slice(None), 'Total')].sum(axis=1)
+        # 2. Add vertical 'Grand Total'
+        today_circle.loc['Grand Total'] = today_circle.sum(numeric_only=True)
+
         styled_today = apply_pu_gradient(today_circle.style, today_circle).set_table_styles(HEADER_STYLES)
         
         selection_today = st.dataframe(
@@ -1100,23 +1149,26 @@ with tab1:
 
         if len(selection_today.selection.rows) > 0:
             selected_circle_today = today_circle.index[selection_today.selection.rows[0]]
-            st.markdown(f"#### 🔍 Today's Feeder Details for: {selected_circle_today}")
             
-            def highlight_notorious_today(row): return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row) if (selected_circle_today, row['Feeder']) in notorious_set else [''] * len(row)
+            # Safeguard drill-down if they click 'Grand Total'
+            if selected_circle_today != 'Grand Total':
+                st.markdown(f"#### 🔍 Today's Feeder Details for: {selected_circle_today}")
+                
+                def highlight_notorious_today(row): return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row) if (selected_circle_today, row['Feeder']) in notorious_set else [''] * len(row)
 
-            today_left, today_mid, today_right = st.columns(3)
-            with today_left:
-                st.markdown(f"**🔵 Planned Outages**")
-                feeder_list_tp = today_planned[today_planned['Circle'] == selected_circle_today][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']].rename(columns={'Status_Calc': 'Status'})
-                st.dataframe(feeder_list_tp.style.apply(highlight_notorious_today, axis=1).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-            with today_mid:
-                st.markdown(f"**🟣 Power Off By PC**")
-                feeder_list_tpc = today_pc[today_pc['Circle'] == selected_circle_today][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']].rename(columns={'Status_Calc': 'Status'})
-                st.dataframe(feeder_list_tpc.style.apply(highlight_notorious_today, axis=1).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-            with today_right:
-                st.markdown(f"**🔴 Unplanned Outages**")
-                feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle_today][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']].rename(columns={'Status_Calc': 'Status'})
-                st.dataframe(feeder_list_tu.style.apply(highlight_notorious_today, axis=1).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                today_left, today_mid, today_right = st.columns(3)
+                with today_left:
+                    st.markdown(f"**🔵 Planned Outages**")
+                    feeder_list_tp = today_planned[today_planned['Circle'] == selected_circle_today][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']].rename(columns={'Status_Calc': 'Status'})
+                    st.dataframe(feeder_list_tp.style.apply(highlight_notorious_today, axis=1).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                with today_mid:
+                    st.markdown(f"**🟣 Power Off By PC**")
+                    feeder_list_tpc = today_pc[today_pc['Circle'] == selected_circle_today][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']].rename(columns={'Status_Calc': 'Status'})
+                    st.dataframe(feeder_list_tpc.style.apply(highlight_notorious_today, axis=1).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                with today_right:
+                    st.markdown(f"**🔴 Unplanned Outages**")
+                    feeder_list_tu = today_unplanned[today_unplanned['Circle'] == selected_circle_today][['Feeder', 'Diff in mins', 'Status_Calc', 'Duration Bucket']].rename(columns={'Status_Calc': 'Status'})
+                    st.dataframe(feeder_list_tu.style.apply(highlight_notorious_today, axis=1).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
     else:
         st.info("No circle data available for today.")
 
@@ -1142,6 +1194,11 @@ with tab1:
     ).fillna(0).astype(int)
 
     if not fiveday_circle.empty:
+        # 1. Add horizontal 'Overall Total'
+        fiveday_circle[('Overall Total', 'Total Events')] = fiveday_circle.loc[:, (slice(None), 'Total')].sum(axis=1)
+        # 2. Add vertical 'Grand Total'
+        fiveday_circle.loc['Grand Total'] = fiveday_circle.sum(numeric_only=True)
+
         styled_fiveday = apply_pu_gradient(fiveday_circle.style, fiveday_circle).set_table_styles(HEADER_STYLES)
         
         selection_fiveday = st.dataframe(
@@ -1153,35 +1210,38 @@ with tab1:
 
         if len(selection_fiveday.selection.rows) > 0:
             selected_circle_5d = fiveday_circle.index[selection_fiveday.selection.rows[0]]
-            st.markdown(f"#### 🔍 5-Days Feeder Details for: {selected_circle_5d}")
             
-            def highlight_notorious_5d(row): return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row) if (selected_circle_5d, row['Feeder']) in notorious_set else [''] * len(row)
+            # Safeguard drill-down if they click 'Grand Total'
+            if selected_circle_5d != 'Grand Total':
+                st.markdown(f"#### 🔍 5-Days Feeder Details for: {selected_circle_5d}")
+                
+                def highlight_notorious_5d(row): return ['background-color: rgba(220, 53, 69, 0.15); color: #850000; font-weight: bold'] * len(row) if (selected_circle_5d, row['Feeder']) in notorious_set else [''] * len(row)
 
-            fiveday_left, fiveday_mid, fiveday_right = st.columns(3)
-            
-            with fiveday_left:
-                st.markdown(f"**🔵 Planned Outages**")
-                feeder_list_fp = filtered_5d[(filtered_5d['Type of Outage'] == 'Planned Outage') & (filtered_5d['Circle'] == selected_circle_5d)].copy()
-                if not feeder_list_fp.empty:
-                    feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
-                    st.dataframe(feeder_list_fp[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']].style.apply(highlight_notorious_5d, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-                else: st.dataframe(pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']).style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-            
-            with fiveday_mid:
-                st.markdown(f"**🟣 Power Off By PC**")
-                feeder_list_fpc = filtered_5d[(filtered_5d['Type of Outage'] == 'Power Off By PC') & (filtered_5d['Circle'] == selected_circle_5d)].copy()
-                if not feeder_list_fpc.empty:
-                    feeder_list_fpc['Diff in Hours'] = (feeder_list_fpc['Diff in mins'] / 60).round(2)
-                    st.dataframe(feeder_list_fpc[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']].style.apply(highlight_notorious_5d, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-                else: st.dataframe(pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']).style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                fiveday_left, fiveday_mid, fiveday_right = st.columns(3)
+                
+                with fiveday_left:
+                    st.markdown(f"**🔵 Planned Outages**")
+                    feeder_list_fp = filtered_5d[(filtered_5d['Type of Outage'] == 'Planned Outage') & (filtered_5d['Circle'] == selected_circle_5d)].copy()
+                    if not feeder_list_fp.empty:
+                        feeder_list_fp['Diff in Hours'] = (feeder_list_fp['Diff in mins'] / 60).round(2)
+                        st.dataframe(feeder_list_fp[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']].style.apply(highlight_notorious_5d, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                    else: st.dataframe(pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']).style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                
+                with fiveday_mid:
+                    st.markdown(f"**🟣 Power Off By PC**")
+                    feeder_list_fpc = filtered_5d[(filtered_5d['Type of Outage'] == 'Power Off By PC') & (filtered_5d['Circle'] == selected_circle_5d)].copy()
+                    if not feeder_list_fpc.empty:
+                        feeder_list_fpc['Diff in Hours'] = (feeder_list_fpc['Diff in mins'] / 60).round(2)
+                        st.dataframe(feeder_list_fpc[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']].style.apply(highlight_notorious_5d, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                    else: st.dataframe(pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']).style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
 
-            with fiveday_right:
-                st.markdown(f"**🔴 Unplanned Outages**")
-                feeder_list_fu = filtered_5d[(filtered_5d['Type of Outage'] == 'Unplanned Outage') & (filtered_5d['Circle'] == selected_circle_5d)].copy()
-                if not feeder_list_fu.empty:
-                    feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
-                    st.dataframe(feeder_list_fu[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']].style.apply(highlight_notorious_5d, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-                else: st.dataframe(pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']).style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                with fiveday_right:
+                    st.markdown(f"**🔴 Unplanned Outages**")
+                    feeder_list_fu = filtered_5d[(filtered_5d['Type of Outage'] == 'Unplanned Outage') & (filtered_5d['Circle'] == selected_circle_5d)].copy()
+                    if not feeder_list_fu.empty:
+                        feeder_list_fu['Diff in Hours'] = (feeder_list_fu['Diff in mins'] / 60).round(2)
+                        st.dataframe(feeder_list_fu[['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']].style.apply(highlight_notorious_5d, axis=1).format({'Diff in Hours': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+                    else: st.dataframe(pd.DataFrame(columns=['Outage Date', 'Start Time', 'Feeder', 'Diff in Hours', 'Duration Bucket']).style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
     else:
         st.info("No circle data available for the selected dates.")
 
