@@ -869,9 +869,6 @@ with tab3:
 
     if df_ptw.empty:Here are the updated sections of your code. You can directly replace these specific blocks in your script.
 
-1. Replace the load_live_data function in 2. DATA LOADING LOGIC:
-
-Python
 # --- 2. DATA LOADING LOGIC ---
 @st.cache_data(ttl="10m")
 def load_live_data(f_today, f_5day, f_ptw):
