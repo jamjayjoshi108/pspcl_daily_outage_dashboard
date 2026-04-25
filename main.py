@@ -1051,30 +1051,33 @@ with tab1:
 
     with col_right:
         st.header("⏳ Last 5 Days Trends")
-        fiveday_planned = df_5day[df_5day['Type of Outage'] == 'Planned Outage']
-        fiveday_pc = df_5day[df_5day['Type of Outage'] == 'Power Off By PC']
-        fiveday_unplanned = df_5day[df_5day['Type of Outage'] == 'Unplanned Outage']
         
-        st.subheader("Outage Summary (5 Days)")
+        # --- MOVED DATE FILTER UP ---
+        all_zone_5d_dates = sorted(list(df_5day['Outage Date'].dropna().unique()))
+        selected_zone_dates_5d = st.multiselect(
+            "Filter 5-Days View by Date:", 
+            options=all_zone_5d_dates, 
+            default=all_zone_5d_dates, 
+            format_func=lambda x: x.strftime('%d %b %Y'),
+            key="zone_5d_date_filter"
+        )
+        
+        # Filter the dataframe based on the selection FIRST
+        filtered_zone_5day = df_5day[df_5day['Outage Date'].isin(selected_zone_dates_5d)]
+
+        # --- KPIs NOW USE FILTERED DATA ---
+        fiveday_planned = filtered_zone_5day[filtered_zone_5day['Type of Outage'] == 'Planned Outage']
+        fiveday_pc = filtered_zone_5day[filtered_zone_5day['Type of Outage'] == 'Power Off By PC']
+        fiveday_unplanned = filtered_zone_5day[filtered_zone_5day['Type of Outage'] == 'Unplanned Outage']
+        
+        st.subheader("Outage Summary (Filtered)")
         kpi4, kpi5, kpi6 = st.columns(3)
         with kpi4: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Planned Outages</div><div class="kpi-value">{len(fiveday_planned)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
         with kpi5: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Power Off By PC</div><div class="kpi-value">{len(fiveday_pc)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
         with kpi6: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Unplanned Outages</div><div class="kpi-value">{len(fiveday_unplanned)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
 
         st.divider()
-        st.subheader("Zone-wise Distribution (5 Days)")
-        
-        # --- NEW DATE FILTER FOR ZONE-WISE ---
-        all_zone_5d_dates = sorted(list(df_5day['Outage Date'].dropna().unique()))
-        selected_zone_dates_5d = st.multiselect(
-            "Filter Zone-wise View by Date:", 
-            options=all_zone_5d_dates, 
-            default=all_zone_5d_dates, 
-            format_func=lambda x: x.strftime('%d %b %Y'),
-            key="zone_5d_date_filter" # Unique key required by Streamlit
-        )
-        
-        filtered_zone_5day = df_5day[df_5day['Outage Date'].isin(selected_zone_dates_5d)]
+        st.subheader("Zone-wise Distribution (Filtered)")
 
         if not filtered_zone_5day.empty:
             zone_5day = filtered_zone_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
