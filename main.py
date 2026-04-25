@@ -729,29 +729,29 @@ if files_missing:
 # --- 2. DATA LOADING LOGIC ---
 @st.cache_data(ttl="10m")
 def load_live_data(f_today, f_5day, f_ptw):
-    df_today = pd.read_csv(f_today)
-    df_5day = pd.read_csv(f_5day)
-    df_ptw = pd.read_csv(f_ptw)
-    
-    # Remove cancelled states to ensure accurate counts
-    df_today = df_today[~df_today['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
-    df_5day = df_5day[~df_5day['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
-    
-    time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
-    for df in [df_today, df_5day]:
-        for col in time_cols: df[col] = pd.to_datetime(df[col], errors='coerce')
-        df['Status_Calc'] = df['Status'].apply(lambda x: 'Active' if str(x).strip().title() == 'Open' else 'Closed')
-        
-        def assign_bucket(mins):
-            if pd.isna(mins) or mins < 0: return "Active/Unknown"
-            hrs = mins / 60
-            if hrs <= 2: return "Up to 2 Hrs"
-            elif hrs <= 4: return "2-4 Hrs"
-            elif hrs <= 8: return "4-8 Hrs"
-            else: return "Above 8 Hrs"
-        df['Duration Bucket'] = df['Diff in mins'].apply(assign_bucket)
-        
-    return df_today, df_5day, df_ptw
+    df_today = pd.read_csv(f_today)
+    df_5day = pd.read_csv(f_5day)
+    df_ptw = pd.read_csv(f_ptw)
+    
+    # Remove cancelled states to ensure accurate counts
+    df_today = df_today[~df_today['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
+    df_5day = df_5day[~df_5day['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
+    
+    time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
+    for df in [df_today, df_5day]:
+        for col in time_cols: df[col] = pd.to_datetime(df[col], errors='coerce')
+        df['Status_Calc'] = df['Status'].apply(lambda x: 'Active' if str(x).strip().title() == 'Open' else 'Closed')
+        
+        def assign_bucket(mins):
+            if pd.isna(mins) or mins < 0: return "Active/Unknown"
+            hrs = mins / 60
+            if hrs <= 2: return "Up to 2 Hrs"
+            elif hrs <= 4: return "2-4 Hrs"
+            elif hrs <= 8: return "4-8 Hrs"
+            else: return "Above 8 Hrs"
+        df['Duration Bucket'] = df['Diff in mins'].apply(assign_bucket)
+        
+    return df_today, df_5day, df_ptw
 
 @st.cache_data
 def load_historical_data():
