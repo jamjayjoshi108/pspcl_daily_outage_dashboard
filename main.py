@@ -922,10 +922,10 @@ with tab3:
 
             # Add Grand Total Row
             if not repeat_feeders.empty:
-                gt_row = pd.Series({c: '' for c in repeat_feeders.columns})
-                gt_row[repeat_feeders.columns[0]] = 'Grand Total'
-                gt_row['PTW Request Count'] = repeat_feeders['PTW Request Count'].sum()
-                repeat_feeders = pd.concat([repeat_feeders, pd.DataFrame([gt_row])], ignore_index=True)
+                gt_dict = {c: '' for c in repeat_feeders.columns}
+                gt_dict[repeat_feeders.columns[0]] = 'Grand Total'
+                gt_dict['PTW Request Count'] = int(repeat_feeders['PTW Request Count'].sum())
+                repeat_feeders = pd.concat([repeat_feeders, pd.DataFrame([gt_dict])], ignore_index=True)
 
             kpi1, kpi2 = st.columns(2)
             with kpi1: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Total Active PTW Requests</div><div class="kpi-value">{df_ptw[ptw_col].nunique()}</div></div><div class="kpi-subtext"><span class="status-badge">Last 7 Days</span></div></div>', unsafe_allow_html=True)
@@ -937,7 +937,6 @@ with tab3:
                 st.dataframe(repeat_feeders.style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
             else:
                 st.success("No feeders had multiple PTWs requested against them in the last 7 days! 🎉")
-
 
 # ==========================================
 # TAB 2: DYNAMIC YOY DRILL-DOWN
