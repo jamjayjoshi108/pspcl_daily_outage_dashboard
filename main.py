@@ -895,9 +895,7 @@ def load_live_data(f_today, f_5day, f_ptw):
         df['Duration Bucket'] = df['Diff in mins'].apply(assign_bucket)
         
     return df_today, df_5day, df_ptw
-2. Replace the NOTORIOUS FEEDERS CALCULATION (Tab 1) section:
 
-Python
 # --- NOTORIOUS FEEDERS CALCULATION (Tab 1) ---
 df_5day['Outage Date'] = df_5day['Start Time'].dt.date
 feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
@@ -912,9 +910,7 @@ feeder_stats = feeder_stats.drop(columns=['Max_Mins', 'Total_Mins'])
 notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
 top_5_notorious = notorious.groupby('Circle').head(5)
 notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
-3. Replace the TAB 1: ORIGINAL DASHBOARD block (down to "Comprehensive Circle-wise Breakdown"):
 
-Python
 # ==========================================
 # TAB 1: ORIGINAL DASHBOARD
 # ==========================================
