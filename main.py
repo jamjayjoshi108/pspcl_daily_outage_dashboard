@@ -1063,8 +1063,21 @@ with tab1:
 
         st.divider()
         st.subheader("Zone-wise Distribution (5 Days)")
-        if not df_5day.empty:
-            zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+        
+        # --- NEW DATE FILTER FOR ZONE-WISE ---
+        all_zone_5d_dates = sorted(list(df_5day['Outage Date'].dropna().unique()))
+        selected_zone_dates_5d = st.multiselect(
+            "Filter Zone-wise View by Date:", 
+            options=all_zone_5d_dates, 
+            default=all_zone_5d_dates, 
+            format_func=lambda x: x.strftime('%d %b %Y'),
+            key="zone_5d_date_filter" # Unique key required by Streamlit
+        )
+        
+        filtered_zone_5day = df_5day[df_5day['Outage Date'].isin(selected_zone_dates_5d)]
+
+        if not filtered_zone_5day.empty:
+            zone_5day = filtered_zone_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
             for col in ['Planned Outage', 'Power Off By PC', 'Unplanned Outage']:
                 if col not in zone_5day: zone_5day[col] = 0
             
@@ -1078,7 +1091,8 @@ with tab1:
             
             styled_zone_5day = apply_pu_gradient(zone_5day.style, zone_5day).set_table_styles(HEADER_STYLES)
             st.dataframe(styled_zone_5day, width="stretch", hide_index=True)
-        else: st.info("No data available for the last 5 days.")
+        else: 
+            st.info("No data available for the selected dates.")
 
     st.divider()
     st.header("🚨 Notorious Feeders (3+ Days of Outages in Last 5 Days)")
