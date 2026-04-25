@@ -729,28 +729,29 @@ if files_missing:
 # --- 2. DATA LOADING LOGIC ---
 @st.cache_data(ttl="10m")
 def load_live_data(f_today, f_5day, f_ptw):
-    df_today = pd.read_csv(f_today)
-    df_5day = pd.read_csv(f_5day)
-    df_ptw = pd.read_csv(f_ptw)
-    
-    df_today['Type of Outage'] = df_today['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
-    df_5day['Type of Outage'] = df_5day['Type of Outage'].replace('Power Off By PC', 'Planned Outage')
-    
-    time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
-    for df in [df_today, df_5day]:
-        for col in time_cols: df[col] = pd.to_datetime(df[col], errors='coerce')
-        df['Status_Calc'] = df['Status'].apply(lambda x: 'Active' if str(x).strip().title() == 'Open' else 'Closed')
-        
-        def assign_bucket(mins):
-            if pd.isna(mins) or mins < 0: return "Active/Unknown"
-            hrs = mins / 60
-            if hrs <= 2: return "Up to 2 Hrs"
-            elif hrs <= 4: return "2-4 Hrs"
-            elif hrs <= 8: return "4-8 Hrs"
-            else: return "Above 8 Hrs"
-        df['Duration Bucket'] = df['Diff in mins'].apply(assign_bucket)
-        
-    return df_today, df_5day, df_ptw
+    df_today = pd.read_csv(f_today)
+    df_5day = pd.read_csv(f_5day)
+    df_ptw = pd.read_csv(f_ptw)
+    
+    # Remove cancelled states to ensure accurate counts
+    df_today = df_today[~df_today['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
+    df_5day = df_5day[~df_5day['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
+    
+    time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
+    for df in [df_today, df_5day]:
+        for col in time_cols: df[col] = pd.to_datetime(df[col], errors='coerce')
+        df['Status_Calc'] = df['Status'].apply(lambda x: 'Active' if str(x).strip().title() == 'Open' else 'Closed')
+        
+        def assign_bucket(mins):
+            if pd.isna(mins) or mins < 0: return "Active/Unknown"
+            hrs = mins / 60
+            if hrs <= 2: return "Up to 2 Hrs"
+            elif hrs <= 4: return "2-4 Hrs"
+            elif hrs <= 8: return "4-8 Hrs"
+            else: return "Above 8 Hrs"
+        df['Duration Bucket'] = df['Diff in mins'].apply(assign_bucket)
+        
+    return df_today, df_5day, df_ptw
 
 @st.cache_data
 def load_historical_data():
@@ -844,11 +845,11 @@ df_5day['Outage Date'] = df_5day['Start Time'].dt.date
 feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
 notorious = feeder_days[feeder_days['Days with Outages'] >= 3]
 
-feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(Total_Events=('Start Time', 'size'), Avg_Mins=('Diff in mins', 'mean'), Total_Mins=('Diff in mins', 'sum')).reset_index()
+feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(Total_Events=('Start Time', 'size'), Max_Mins=('Diff in mins', 'max'), Total_Mins=('Diff in mins', 'sum')).reset_index()
 feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
 feeder_stats['Total Duration (Hours)'] = (feeder_stats['Total_Mins'] / 60).round(2)
-feeder_stats['Average Duration (Hours)'] = (feeder_stats['Avg_Mins'] / 60).round(2)
-feeder_stats = feeder_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
+feeder_stats['Max Duration (Hours)'] = (feeder_stats['Max_Mins'] / 60).round(2)
+feeder_stats = feeder_stats.drop(columns=['Max_Mins', 'Total_Mins'])
 
 notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
 top_5_notorious = notorious.groupby('Circle').head(5)
@@ -866,7 +867,60 @@ with tab3:
     st.header("🛠️ PTW Frequency Tracker (Last 7 Days)")
     st.markdown("Identifies specific feeders that had a Permit to Work (PTW) taken against them **two or more times** in separate requests over the last 7 days.")
 
-    if df_ptw.empty:
+    if df_ptw.empty:Here are the updated sections of your code. You can directly replace these specific blocks in your script.
+
+1. Replace the load_live_data function in 2. DATA LOADING LOGIC:
+
+Python
+# --- 2. DATA LOADING LOGIC ---
+@st.cache_data(ttl="10m")
+def load_live_data(f_today, f_5day, f_ptw):
+    df_today = pd.read_csv(f_today)
+    df_5day = pd.read_csv(f_5day)
+    df_ptw = pd.read_csv(f_ptw)
+    
+    # Remove cancelled states to ensure accurate counts
+    df_today = df_today[~df_today['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
+    df_5day = df_5day[~df_5day['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
+    
+    time_cols = ['Schedule Created At', 'Start Time', 'End Time', 'Last Updated At']
+    for df in [df_today, df_5day]:
+        for col in time_cols: df[col] = pd.to_datetime(df[col], errors='coerce')
+        df['Status_Calc'] = df['Status'].apply(lambda x: 'Active' if str(x).strip().title() == 'Open' else 'Closed')
+        
+        def assign_bucket(mins):
+            if pd.isna(mins) or mins < 0: return "Active/Unknown"
+            hrs = mins / 60
+            if hrs <= 2: return "Up to 2 Hrs"
+            elif hrs <= 4: return "2-4 Hrs"
+            elif hrs <= 8: return "4-8 Hrs"
+            else: return "Above 8 Hrs"
+        df['Duration Bucket'] = df['Diff in mins'].apply(assign_bucket)
+        
+    return df_today, df_5day, df_ptw
+2. Replace the NOTORIOUS FEEDERS CALCULATION (Tab 1) section:
+
+Python
+# --- NOTORIOUS FEEDERS CALCULATION (Tab 1) ---
+df_5day['Outage Date'] = df_5day['Start Time'].dt.date
+feeder_days = df_5day.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
+notorious = feeder_days[feeder_days['Days with Outages'] >= 3]
+
+feeder_stats = df_5day.groupby(['Circle', 'Feeder']).agg(Total_Events=('Start Time', 'size'), Max_Mins=('Diff in mins', 'max'), Total_Mins=('Diff in mins', 'sum')).reset_index()
+feeder_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+feeder_stats['Total Duration (Hours)'] = (feeder_stats['Total_Mins'] / 60).round(2)
+feeder_stats['Max Duration (Hours)'] = (feeder_stats['Max_Mins'] / 60).round(2)
+feeder_stats = feeder_stats.drop(columns=['Max_Mins', 'Total_Mins'])
+
+notorious = notorious.merge(feeder_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+top_5_notorious = notorious.groupby('Circle').head(5)
+notorious_set = set(zip(top_5_notorious['Circle'], top_5_notorious['Feeder']))
+3. Replace the TAB 1: ORIGINAL DASHBOARD block (down to "Comprehensive Circle-wise Breakdown"):
+
+Python
+# ==========================================
+# TAB 1: ORIGINAL DASHBOARD
+# ==========================================
         st.info("No PTW data found for the last 7 days.")
     else:
         ptw_col = next((c for c in df_ptw.columns if 'ptw' in c.lower() or 'request' in c.lower() or 'id' in c.lower()), None)
@@ -976,89 +1030,95 @@ with tab2:
 # TAB 1: ORIGINAL DASHBOARD
 # ==========================================
 with tab1:
-    col_left, col_right = st.columns(2, gap="large")
+    col_left, col_right = st.columns(2, gap="large")
 
-    with col_left:
-        st.header(f"📅 Today's Outages ({now_ist.strftime('%d %b %Y')})")
-        today_planned = df_today[df_today['Type of Outage'] == 'Planned Outage']
-        today_unplanned = df_today[df_today['Type of Outage'] == 'Unplanned Outage']
-        
-        st.subheader("Outage Summary")
-        kpi1, kpi2 = st.columns(2)
-        with kpi1:
-            active_p, closed_p = len(today_planned[today_planned['Status_Calc'] == 'Active']), len(today_planned[today_planned['Status_Calc'] == 'Closed'])
-            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Total Planned Outages</div><div class="kpi-value">{len(today_planned)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_p}</span> <span class="status-badge">🟢 Closed: {closed_p}</span></div></div>', unsafe_allow_html=True)
-        with kpi2:
-            active_u, closed_u = len(today_unplanned[today_unplanned['Status_Calc'] == 'Active']), len(today_unplanned[today_unplanned['Status_Calc'] == 'Closed'])
-            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Total Unplanned Outages</div><div class="kpi-value">{len(today_unplanned)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_u}</span> <span class="status-badge">🟢 Closed: {closed_u}</span></div></div>', unsafe_allow_html=True)
+    with col_left:
+        st.header(f"📅 Today's Outages ({now_ist.strftime('%d %b %Y')})")
+        today_planned = df_today[df_today['Type of Outage'] == 'Planned Outage']
+        today_pc = df_today[df_today['Type of Outage'] == 'Power Off By PC']
+        today_unplanned = df_today[df_today['Type of Outage'] == 'Unplanned Outage']
+        
+        st.subheader("Outage Summary")
+        kpi1, kpi2, kpi3 = st.columns(3)
+        with kpi1:
+            active_p, closed_p = len(today_planned[today_planned['Status_Calc'] == 'Active']), len(today_planned[today_planned['Status_Calc'] == 'Closed'])
+            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Planned Outages</div><div class="kpi-value">{len(today_planned)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_p}</span> <span class="status-badge">🟢 Closed: {closed_p}</span></div></div>', unsafe_allow_html=True)
+        with kpi2:
+            active_pc, closed_pc = len(today_pc[today_pc['Status_Calc'] == 'Active']), len(today_pc[today_pc['Status_Calc'] == 'Closed'])
+            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Power Off By PC</div><div class="kpi-value">{len(today_pc)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_pc}</span> <span class="status-badge">🟢 Closed: {closed_pc}</span></div></div>', unsafe_allow_html=True)
+        with kpi3:
+            active_u, closed_u = len(today_unplanned[today_unplanned['Status_Calc'] == 'Active']), len(today_unplanned[today_unplanned['Status_Calc'] == 'Closed'])
+            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Unplanned Outages</div><div class="kpi-value">{len(today_unplanned)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_u}</span> <span class="status-badge">🟢 Closed: {closed_u}</span></div></div>', unsafe_allow_html=True)
 
-        st.divider()
-        st.subheader("Zone-wise Distribution (Today)")
-        if not df_today.empty:
-            zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
-            for col in ['Planned Outage', 'Unplanned Outage']:
-                if col not in zone_today: zone_today[col] = 0
-            zone_today['Total'] = zone_today['Planned Outage'] + zone_today['Unplanned Outage']
-            
-            # Apply heat-map gradient styling
-            styled_zone_today = apply_pu_gradient(zone_today.style, zone_today).set_table_styles(HEADER_STYLES)
-            st.dataframe(styled_zone_today, width="stretch", hide_index=True)
-        else: st.info("No data available for today.")
+        st.divider()
+        st.subheader("Zone-wise Distribution (Today)")
+        if not df_today.empty:
+            zone_today = df_today.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+            for col in ['Planned Outage', 'Power Off By PC', 'Unplanned Outage']:
+                if col not in zone_today: zone_today[col] = 0
+            zone_today['Total'] = zone_today['Planned Outage'] + zone_today['Power Off By PC'] + zone_today['Unplanned Outage']
+            
+            # Apply heat-map gradient styling
+            styled_zone_today = apply_pu_gradient(zone_today.style, zone_today).set_table_styles(HEADER_STYLES)
+            st.dataframe(styled_zone_today, width="stretch", hide_index=True)
+        else: st.info("No data available for today.")
 
-    with col_right:
-        st.header("⏳ Last 5 Days Trends")
-        fiveday_planned = df_5day[df_5day['Type of Outage'] == 'Planned Outage']
-        fiveday_unplanned = df_5day[df_5day['Type of Outage'] == 'Unplanned Outage']
-        
-        st.subheader("Outage Summary (5 Days)")
-        kpi3, kpi4 = st.columns(2)
-        with kpi3: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Total Planned Outages</div><div class="kpi-value">{len(fiveday_planned)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
-        with kpi4: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Total Unplanned Outages</div><div class="kpi-value">{len(fiveday_unplanned)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
+    with col_right:
+        st.header("⏳ Last 5 Days Trends")
+        fiveday_planned = df_5day[df_5day['Type of Outage'] == 'Planned Outage']
+        fiveday_pc = df_5day[df_5day['Type of Outage'] == 'Power Off By PC']
+        fiveday_unplanned = df_5day[df_5day['Type of Outage'] == 'Unplanned Outage']
+        
+        st.subheader("Outage Summary (5 Days)")
+        kpi4, kpi5, kpi6 = st.columns(3)
+        with kpi4: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Planned Outages</div><div class="kpi-value">{len(fiveday_planned)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
+        with kpi5: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Power Off By PC</div><div class="kpi-value">{len(fiveday_pc)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
+        with kpi6: st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Unplanned Outages</div><div class="kpi-value">{len(fiveday_unplanned)}</div></div><div class="kpi-subtext" style="visibility: hidden;">Spacer</div></div>', unsafe_allow_html=True)
 
-        st.divider()
-        st.subheader("Zone-wise Distribution (5 Days)")
-        if not df_5day.empty:
-            zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
-            for col in ['Planned Outage', 'Unplanned Outage']:
-                if col not in zone_5day: zone_5day[col] = 0
-            zone_5day['Total'] = zone_5day['Planned Outage'] + zone_5day['Unplanned Outage']
-            
-            # Apply heat-map gradient styling
-            styled_zone_5day = apply_pu_gradient(zone_5day.style, zone_5day).set_table_styles(HEADER_STYLES)
-            st.dataframe(styled_zone_5day, width="stretch", hide_index=True)
-        else: st.info("No data available for the last 5 days.")
+        st.divider()
+        st.subheader("Zone-wise Distribution (5 Days)")
+        if not df_5day.empty:
+            zone_5day = df_5day.groupby(['Zone', 'Type of Outage']).size().unstack(fill_value=0).reset_index()
+            for col in ['Planned Outage', 'Power Off By PC', 'Unplanned Outage']:
+                if col not in zone_5day: zone_5day[col] = 0
+            zone_5day['Total'] = zone_5day['Planned Outage'] + zone_5day['Power Off By PC'] + zone_5day['Unplanned Outage']
+            
+            # Apply heat-map gradient styling
+            styled_zone_5day = apply_pu_gradient(zone_5day.style, zone_5day).set_table_styles(HEADER_STYLES)
+            st.dataframe(styled_zone_5day, width="stretch", hide_index=True)
+        else: st.info("No data available for the last 5 days.")
 
-    st.divider()
-    st.header("🚨 Notorious Feeders (3+ Days of Outages in Last 5 Days)")
-    st.caption("Top 5 worst-performing feeders per circle based on continuous outage days.")
+    st.divider()
+    st.header("🚨 Notorious Feeders (3+ Days of Outages in Last 5 Days)")
+    st.caption("Top 5 worst-performing feeders per circle based on continuous outage days.")
 
-    noto_col1, noto_col2 = st.columns(2)
-    with noto_col1: selected_notorious_circle = st.selectbox("Filter by Circle:", ["All Circles"] + sorted(top_5_notorious['Circle'].unique().tolist()), index=0)
-    with noto_col2: selected_notorious_type = st.selectbox("Filter by Outage Type:", ["All Types", "Planned Outage", "Unplanned Outage"], index=0)
+    noto_col1, noto_col2 = st.columns(2)
+    with noto_col1: selected_notorious_circle = st.selectbox("Filter by Circle:", ["All Circles"] + sorted(top_5_notorious['Circle'].unique().tolist()), index=0)
+    with noto_col2: selected_notorious_type = st.selectbox("Filter by Outage Type:", ["All Types", "Planned Outage", "Power Off By PC", "Unplanned Outage"], index=0)
 
-    df_dyn = df_5day.copy()
-    if selected_notorious_type != "All Types": df_dyn = df_dyn[df_dyn['Type of Outage'] == selected_notorious_type]
+    df_dyn = df_5day.copy()
+    if selected_notorious_type != "All Types": df_dyn = df_dyn[df_dyn['Type of Outage'] == selected_notorious_type]
 
-    if not df_dyn.empty:
-        dyn_days = df_dyn.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
-        dyn_noto = dyn_days[dyn_days['Days with Outages'] >= 3]
+    if not df_dyn.empty:
+        dyn_days = df_dyn.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
+        dyn_noto = dyn_days[dyn_days['Days with Outages'] >= 3]
 
-        if not dyn_noto.empty:
-            dyn_stats = df_dyn.groupby(['Circle', 'Feeder']).agg(Total_Events=('Start Time', 'size'), Avg_Mins=('Diff in mins', 'mean'), Total_Mins=('Diff in mins', 'sum')).reset_index()
-            dyn_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
-            dyn_stats['Total Duration (Hours)'] = (dyn_stats['Total_Mins'] / 60).round(2)
-            dyn_stats['Average Duration (Hours)'] = (dyn_stats['Avg_Mins'] / 60).round(2)
-            dyn_stats = dyn_stats.drop(columns=['Avg_Mins', 'Total_Mins'])
+        if not dyn_noto.empty:
+            dyn_stats = df_dyn.groupby(['Circle', 'Feeder']).agg(Total_Events=('Start Time', 'size'), Max_Mins=('Diff in mins', 'max'), Total_Mins=('Diff in mins', 'sum')).reset_index()
+            dyn_stats.rename(columns={'Total_Events': 'Total Outage Events'}, inplace=True)
+            dyn_stats['Total Duration (Hours)'] = (dyn_stats['Total_Mins'] / 60).round(2)
+            dyn_stats['Max Duration (Hours)'] = (dyn_stats['Max_Mins'] / 60).round(2)
+            dyn_stats = dyn_stats.drop(columns=['Max_Mins', 'Total_Mins'])
 
-            dyn_noto = dyn_noto.merge(dyn_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
-            dyn_top5 = dyn_noto.groupby('Circle').head(5)
-            filtered_notorious = dyn_top5[dyn_top5['Circle'] == selected_notorious_circle] if selected_notorious_circle != "All Circles" else dyn_top5
+            dyn_noto = dyn_noto.merge(dyn_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
+            dyn_top5 = dyn_noto.groupby('Circle').head(5)
+            filtered_notorious = dyn_top5[dyn_top5['Circle'] == selected_notorious_circle] if selected_notorious_circle != "All Circles" else dyn_top5
 
-            if not filtered_notorious.empty:
-                st.dataframe(filtered_notorious.style.format({'Average Duration (Hours)': '{:.2f}', 'Total Duration (Hours)': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-            else: st.info(f"No notorious feeders found for {selected_notorious_circle} matching the criteria.")
-        else: st.info(f"No notorious feeders identified for {selected_notorious_type}.")
-    else: st.info("No data available for the selected outage type.")
+            if not filtered_notorious.empty:
+                st.dataframe(filtered_notorious.style.format({'Max Duration (Hours)': '{:.2f}', 'Total Duration (Hours)': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+            else: st.info(f"No notorious feeders found for {selected_notorious_circle} matching the criteria.")
+        else: st.info(f"No notorious feeders identified for {selected_notorious_type}.")
+    else: st.info("No data available for the selected outage type.")
 
     st.divider()
     st.header("Comprehensive Circle-wise Breakdown")
