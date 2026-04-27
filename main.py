@@ -269,9 +269,21 @@ def render_date_selector(tab_key):
 
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("From Date", value=calc_start, format="DD/MM/YYYY", disabled=(period != "Custom"))
+        start_date = st.date_input(
+            "From Date",
+            value=calc_start,
+            format="DD/MM/YYYY",
+            disabled=(period != "Custom"),
+            key=f"{tab_key}_from_date",        # ← UNIQUE KEY ADDED
+        )
     with col2:
-        end_date = st.date_input("To Date", value=calc_end, format="DD/MM/YYYY", disabled=(period != "Custom"))
+        end_date = st.date_input(
+            "To Date",
+            value=calc_end,
+            format="DD/MM/YYYY",
+            disabled=(period != "Custom"),
+            key=f"{tab_key}_to_date",          # ← UNIQUE KEY ADDED
+        )
 
     if period == "Custom":
         st.session_state[f"{tab_key}_custom_start"] = start_date
