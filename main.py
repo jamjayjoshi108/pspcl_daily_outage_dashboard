@@ -194,27 +194,30 @@ def render_date_selector(tab_key):
         calc_start, calc_end = today - timedelta(days=180), today
     else: 
         # For 'Custom', preserve what they pick in session state, defaulting to today
-        calc_start = st.session_state.get(f"{tab_key}_start", today)
-        calc_end = st.session_state.get(f"{tab_key}_end", today)
+        calc_start = st.session_state.get(f"{tab_key}_custom_start", today)
+        calc_end = st.session_state.get(f"{tab_key}_custom_end", today)
 
-    # Render From and To inputs side-by-side
+    # Render From and To inputs side-by-side without keys so they respect the calculated 'value'
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input(
             "From Date", 
             value=calc_start, 
             format="DD/MM/YYYY", 
-            disabled=(period != "Custom"), # Locks the box unless 'Custom' is selected
-            key=f"{tab_key}_start"
+            disabled=(period != "Custom")
         )
     with col2:
         end_date = st.date_input(
             "To Date", 
             value=calc_end, 
             format="DD/MM/YYYY", 
-            disabled=(period != "Custom"),
-            key=f"{tab_key}_end"
+            disabled=(period != "Custom")
         )
+        
+    # Save the custom dates if Custom is selected so they don't reset
+    if period == "Custom":
+        st.session_state[f"{tab_key}_custom_start"] = start_date
+        st.session_state[f"{tab_key}_custom_end"] = end_date
         
     return start_date, end_date
 
