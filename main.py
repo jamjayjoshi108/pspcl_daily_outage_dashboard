@@ -155,20 +155,20 @@ for d in [df_hist_curr, df_5day, df_today]:
 if dfs_to_combine:
     df_master = pd.concat(dfs_to_combine, ignore_index=True)
     
-    # 1. Identify the exact ID column name (usually 'ID' or 'Outage ID')
-    id_col = next((c for c in df_master.columns if str(c).strip().lower() in ['id', 'outage id']), None)
+    # # 1. Identify the exact ID column name (usually 'ID' or 'Outage ID')
+    # id_col = next((c for c in df_master.columns if str(c).strip().lower() in ['id', 'outage id']), None)
     
-    # 2. Define the strict combination of columns for deduplication
-    target_cols = [id_col, 'Zone', 'Circle', 'Division', 'Feeder ID', 'Feeder', 'Schedule Created At', 'Start Time']
+    # # 2. Define the strict combination of columns for deduplication
+    # target_cols = [id_col, 'Zone', 'Circle', 'Division', 'Feeder ID', 'Feeder', 'Schedule Created At', 'Start Time']
     
-    # 3. Filter out any columns that might be missing to prevent KeyErrors
-    dedup_cols = [c for c in target_cols if c and c in df_master.columns]
+    # # 3. Filter out any columns that might be missing to prevent KeyErrors
+    # dedup_cols = [c for c in target_cols if c and c in df_master.columns]
     
-    # 4. Drop duplicates using this exact combination
-    if dedup_cols:
-        df_master = df_master.drop_duplicates(subset=dedup_cols, keep='last')
-    else:
-        df_master = df_master.drop_duplicates(keep='last')
+    # # 4. Drop duplicates using this exact combination
+    # if dedup_cols:
+    #     df_master = df_master.drop_duplicates(subset=dedup_cols, keep='last')
+    # else:
+    #     df_master = df_master.drop_duplicates(keep='last')
 else:
     df_master = pd.DataFrame()
 
