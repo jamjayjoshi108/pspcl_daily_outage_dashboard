@@ -5,6 +5,8 @@
 #====================================================================================================================================
 import time
 import os
+import shutil
+import glob
 from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -14,6 +16,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 # --- CLOUD CONFIGURATION ---
 download_dir = os.getcwd() 
+archive_dir = os.path.join(download_dir, "archive")
+os.makedirs(archive_dir, exist_ok=True) # Ensure archive directory exists
 
 chrome_options = Options()
 chrome_options.add_argument("--headless=new") 
@@ -122,8 +126,16 @@ try:
             
         if not os.path.exists(input_file): raise FileNotFoundError(f"Download timed out for {final_name}!")
         
+        # Rename in main folder (Overwrites if it already exists for today)
         os.rename(input_file, os.path.join(download_dir, final_name))
-        print(f"File saved: {final_name}")
+        print(f"File saved to main: {final_name}")
+        
+        # Save a timestamped copy to the archive folder
+        ts = datetime.now().strftime("%H%M%S")
+        archive_name = final_name.replace('.csv', f'_{ts}.csv')
+        shutil.copy(os.path.join(download_dir, final_name), os.path.join(archive_dir, archive_name))
+        print(f"Timestamped copy saved to archive: {archive_name}")
+        
         time.sleep(3) 
 
     # ---------------------------------------------------------
@@ -141,7 +153,6 @@ try:
     driver.switch_to.default_content()
     WebDriverWait(driver, 60).until(EC.frame_to_be_available_and_switch_to_it("workFrame"))
 
-    # Rolling 7-day period for PTW (aligning with portal updates)
     ptw_to_date = today_str
     ptw_from_date = (today - timedelta(days=7)).strftime("%Y-%m-%d")
     ptw_filename = f"{today_str}_PTW_Last_7_Days.csv"
@@ -172,8 +183,35 @@ try:
         
     if not os.path.exists(input_file): raise FileNotFoundError("PTW Download timed out!")
     
+    # Rename in main folder (Overwrites if it already exists for today)
     os.rename(input_file, os.path.join(download_dir, ptw_filename))
-    print(f"PTW File saved: {ptw_filename}")
+    print(f"PTW File saved to main: {ptw_filename}")
+    
+    # Save a timestamped copy to the archive folder
+    ts = datetime.now().strftime("%H%M%S")
+    archive_ptw_name = ptw_filename.replace('.csv', f'_{ts}.csv')
+    shutil.copy(os.path.join(download_dir, ptw_filename), os.path.join(archive_dir, archive_ptw_name))
+    print(f"Timestamped PTW copy saved to archive: {archive_ptw_name}")
+
+    # ---------------------------------------------------------
+    # STEP 11: Clean Up Main Directory (Move old files to archive)
+    # ---------------------------------------------------------
+    print("\n--- Cleaning up old files from main directory ---")
+    valid_prefixes = (today_str, ly_str, "Historical") 
+    
+    for csv_file in glob.glob(os.path.join(download_dir, "*.csv")):
+        file_basename = os.path.basename(csv_file)
+        
+        # If the file is NOT from today, last year's equivalent, or a Historical master file...
+        if not file_basename.startswith(valid_prefixes):
+            print(f"Archiving out-of-date file: {file_basename}")
+            target_path = os.path.join(archive_dir, file_basename)
+            
+            # Move it to archive (or just delete if it's somehow already there)
+            if os.path.exists(target_path):
+                os.remove(csv_file)
+            else:
+                shutil.move(csv_file, target_path)
 
 finally:
     driver.quit()
