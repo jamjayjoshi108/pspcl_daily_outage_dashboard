@@ -296,7 +296,8 @@
 #     try:
 #         return dt.replace(year=dt.year - 1)
 #     except ValueError:
-#         return dt.replace(year=dt.year - 1, day=28)
+#         return dt.replace(year=dt.year - 1
+, day=28)
 
 
 # def generate_yoy_dist_expanded(df_curr, df_ly, group_col):
@@ -1608,21 +1609,23 @@ def render_date_selector(tab_key):
         calc_start = st.session_state.get(f"{tab_key}_custom_start", today)
         calc_end = st.session_state.get(f"{tab_key}_custom_end", today)
 
-    # Render From and To inputs side-by-side without keys so they respect the calculated 'value'
+    # Render From and To inputs with dynamic keys so they remount and respect the calculated 'value'
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input(
             "From Date", 
             value=calc_start, 
             format="DD/MM/YYYY", 
-            disabled=(period != "Custom")
+            disabled=(period != "Custom"),
+            key=f"start_{tab_key}_{period}"  # <-- Added dynamic key
         )
     with col2:
         end_date = st.date_input(
             "To Date", 
             value=calc_end, 
             format="DD/MM/YYYY", 
-            disabled=(period != "Custom")
+            disabled=(period != "Custom"),
+            key=f"end_{tab_key}_{period}"    # <-- Added dynamic key
         )
         
     # Save the custom dates if Custom is selected so they don't reset
