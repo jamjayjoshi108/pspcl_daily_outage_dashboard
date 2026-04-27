@@ -296,8 +296,7 @@
 #     try:
 #         return dt.replace(year=dt.year - 1)
 #     except ValueError:
-#         return dt.replace(year=dt.year - 1
-, day=28)
+#         return dt.replace(year=dt.year - 1, day=28)
 
 
 # def generate_yoy_dist_expanded(df_curr, df_ly, group_col):
