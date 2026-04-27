@@ -134,9 +134,8 @@ def clean_outage_data(df):
     return df
 
 
-# --- 3. DYNAMIC API FETCHING LOGIC (WITH UI) ---
-@st.cache_data(ttl="15m", show_spinner=False)
-def fetch_api_with_ui(_progress_bar, _status_text, endpoint, api_name, start_date, end_date, default_type, is_ptw):
+# --- 3. DYNAMIC API FETCHING LOGIC (NO @st.cache_data HERE) ---
+def fetch_api_with_ui(progress_bar, status_text, endpoint, api_name, start_date, end_date, default_type, is_ptw):
     """Fetches data from API in strict 30-day buckets, updating the provided Streamlit UI placeholders."""
     base_url = "https://distribution.pspcl.in"
     url = f"{base_url}/returns/module.php?to={endpoint}"
@@ -147,24 +146,21 @@ def fetch_api_with_ui(_progress_bar, _status_text, endpoint, api_name, start_dat
     total_days = (end_date - start_date).days + 1
     
     if total_days <= 0:
-        _progress_bar.progress(1.0)
-        _status_text.success(f"✅ **{api_name}**: Date range is zero or negative. Loaded 0 records.")
+        progress_bar.progress(1.0)
+        status_text.success(f"✅ **{api_name}**: Date range is zero or negative. Loaded 0 records.")
         return pd.DataFrame()
 
     start_time = time.time()
     
     while current_start <= end_date:
-        # STRICT 30-DAY BUCKET CALCULATION (inclusive: start + 29 days = 30 days)
         current_end = min(current_start + timedelta(days=29), end_date)
         
-        # Calculate dynamic UI metrics
         days_processed = (current_start - start_date).days
         pct_complete = min(days_processed / total_days, 0.99)
         elapsed = time.time() - start_time
         
-        # Update progress bar and text UI
-        _progress_bar.progress(pct_complete)
-        _status_text.markdown(f"""
+        progress_bar.progress(pct_complete)
+        status_text.markdown(f"""
             <div class="loading-text-box">
                 <b>📡 API Target:</b> {api_name}<br/>
                 <b>⏳ Fetching Bucket:</b> {current_start.strftime('%d %b %Y')} to {current_end.strftime('%d %b %Y')}<br/>
@@ -191,8 +187,8 @@ def fetch_api_with_ui(_progress_bar, _status_text, endpoint, api_name, start_dat
         current_start = current_end + timedelta(days=1)
         
     final_time = time.time() - start_time
-    _progress_bar.progress(1.0)
-    _status_text.success(f"✅ **{api_name} Data Fetched Successfully!** (100% Complete) | **Total Time:** {final_time:.1f}s | **Total Records:** {len(all_data):,}")
+    progress_bar.progress(1.0)
+    status_text.success(f"✅ **{api_name} Data Fetched Successfully!** (100% Complete) | **Total Time:** {final_time:.1f}s | **Total Records:** {len(all_data):,}")
     
     return normalize_api_data(all_data, is_ptw=is_ptw, default_type=default_type)
 
@@ -205,34 +201,50 @@ def load_historical_ly():
 # --- UI TITLE ---
 st.title("⚡ Power Outage Monitoring Dashboard")
 
-# --- VISIBLE REAL-TIME LOADING STATUS ---
-# Define strict start dates based on the rules
+# --- MANUAL CACHE & REAL-TIME LOADING UI ---
 outage_api_start = datetime(2026, 1, 1).date()
 ptw_api_start = datetime(2025, 11, 1).date()
 api_end_date = now_ist.date()
 
-with st.status("🔄 Initializing Dashboard Data...", expanded=True) as status:
-    st.markdown("### 🔌 Outages Data Tracker")
-    pb_outages = st.progress(0)
-    st_outages = st.empty()
-    df_master = fetch_api_with_ui(pb_outages, st_outages, "OutageAPI.getOutages", "Outages API", outage_api_start, api_end_date, "Unplanned Outage", False)
-    
-    st.divider()
-    
-    st.markdown("### 🛠️ PTW Requests Tracker")
-    pb_ptw = st.progress(0)
-    st_ptw = st.empty()
-    df_ptw = fetch_api_with_ui(pb_ptw, st_ptw, "OutageAPI.getPTWRequests", "PTW API", ptw_api_start, api_end_date, "Planned Outage", True)
-    
-    st.divider()
-    
-    st.markdown("### 🕰️ Historical Data Tracker")
-    st.info("Loading 2025 Historical Baseline (Local CSV)...")
-    df_hist_curr = df_master.copy() 
-    df_hist_ly = load_historical_ly()
-    st.success("✅ 2025 Historical Data Loaded Successfully!")
-    
-    status.update(label="✅ All Dashboard Data Synchronized and Ready!", state="complete", expanded=False)
+cache_ttl = 15 * 60 # 15 minutes in seconds
+
+# Check if data needs to be loaded (either first load, or 15 mins have passed)
+if "last_fetch_time" not in st.session_state or (time.time() - st.session_state.last_fetch_time) > cache_ttl:
+    with st.status("🔄 Initializing Dashboard Data...", expanded=True) as status:
+        st.markdown("### 🔌 Outages Data Tracker")
+        pb_outages = st.progress(0)
+        st_outages = st.empty()
+        df_master = fetch_api_with_ui(pb_outages, st_outages, "OutageAPI.getOutages", "Outages API", outage_api_start, api_end_date, "Unplanned Outage", False)
+        
+        st.divider()
+        
+        st.markdown("### 🛠️ PTW Requests Tracker")
+        pb_ptw = st.progress(0)
+        st_ptw = st.empty()
+        df_ptw = fetch_api_with_ui(pb_ptw, st_ptw, "OutageAPI.getPTWRequests", "PTW API", ptw_api_start, api_end_date, "Planned Outage", True)
+        
+        st.divider()
+        
+        st.markdown("### 🕰️ Historical Data Tracker")
+        st.info("Loading 2025 Historical Baseline (Local CSV)...")
+        df_hist_ly = load_historical_ly()
+        st.success("✅ 2025 Historical Data Loaded Successfully!")
+        
+        status.update(label="✅ All Dashboard Data Synchronized and Ready!", state="complete", expanded=False)
+        
+        # Save to custom session_state cache
+        st.session_state.df_master = df_master
+        st.session_state.df_ptw = df_ptw
+        st.session_state.df_hist_ly = df_hist_ly
+        st.session_state.last_fetch_time = time.time()
+else:
+    # Load instantly from session_state if data is still fresh
+    df_master = st.session_state.df_master
+    df_ptw = st.session_state.df_ptw
+    df_hist_ly = st.session_state.df_hist_ly
+
+# Duplicate master for YoY logic
+df_hist_curr = df_master.copy()
 
 
 # --- 4. DASHBOARD HELPER FUNCTIONS ---
@@ -662,7 +674,6 @@ with tab3:
                     st.dataframe(repeat_feeders.style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
                 else:
                     st.success("No feeders had multiple PTWs requested against them in the selected timeframe! 🎉")
-
 # # # #  =======================================================================================================================================
 # # # #  =======================================================================================================================================
 # # # #V8
