@@ -2155,10 +2155,11 @@ def load_live_data(f_today, f_5day, f_ptw):
 def load_historical_data():
     df_26 = pd.read_csv('Historical_2026.csv') if os.path.exists('Historical_2026.csv') else pd.DataFrame()
     df_25 = pd.read_csv('Historical_2025.csv') if os.path.exists('Historical_2025.csv') else pd.DataFrame()
-    return clean_outage_data(df_26), clean_outage_data(df_25)
+    df_ptw_h = pd.read_csv('PTW_Master_Historical.csv') if os.path.exists('PTW_Master_Historical.csv') else pd.DataFrame()
+    return clean_outage_data(df_26), clean_outage_data(df_25), df_ptw_h
 
 df_today, df_5day, df_ptw = load_live_data(file_today, file_5day, file_ptw)
-df_hist_curr, df_hist_ly = load_historical_data()
+df_hist_curr, df_hist_ly, df_ptw_hist = load_historical_data()
 
 # --- CREATE UNIFIED MASTER DATAFRAME ---
 dfs_to_combine = []
@@ -2170,6 +2171,22 @@ if dfs_to_combine:
 else:
     df_master = pd.DataFrame()
 
+# --- CREATE UNIFIED PTW MASTER DATAFRAME ---
+ptw_dfs_to_combine = []
+if not df_ptw_hist.empty: ptw_dfs_to_combine.append(df_ptw_hist)
+if not df_ptw.empty: ptw_dfs_to_combine.append(df_ptw)
+
+if ptw_dfs_to_combine:
+    df_ptw_master = pd.concat(ptw_dfs_to_combine, ignore_index=True)
+    
+    # Identify the ID column dynamically to drop overlapping records
+    ptw_id_col = next((c for c in df_ptw_master.columns if 'ptw' in str(c).lower() or 'request' in str(c).lower() or 'id' in str(c).lower()), None)
+    
+    if ptw_id_col:
+        # keep='last' ensures any updated statuses from your live 7-day file overwrite the older historical records
+        df_ptw_master = df_ptw_master.drop_duplicates(subset=[ptw_id_col], keep='last')
+else:
+    df_ptw_master = pd.DataFrame()
 
 # --- CALLBACKS & DATE WIDGET LOGIC ---
 def handle_period_change(tab_key):
@@ -2709,21 +2726,21 @@ with tab3:
     
     st.markdown("Identifies specific feeders that had a Permit to Work (PTW) taken against them **two or more times** in separate requests over the selected timeframe.")
 
-    if df_ptw.empty:
+    if df_ptw_master.empty:
         st.info("No PTW data available in the current files.")
     else:
         # Make sure PTW dates are parsed correctly
-        date_col = next((c for c in df_ptw.columns if 'date' in c.lower() or 'time' in c.lower()), None)
+        date_col = next((c for c in df_ptw_master.columns if 'date' in c.lower() or 'time' in c.lower()), None)
         if date_col:
-            df_ptw['Temp_Date'] = pd.to_datetime(df_ptw[date_col], errors='coerce').dt.date
-            mask_ptw = (df_ptw['Temp_Date'] >= start_d3) & (df_ptw['Temp_Date'] <= end_d3)
-            filtered_ptw = df_ptw[mask_ptw].copy()
+            df_ptw_master['Temp_Date'] = pd.to_datetime(df_ptw_master[date_col], errors='coerce').dt.date
+            mask_ptw = (df_ptw_master['Temp_Date'] >= start_d3) & (df_ptw_master['Temp_Date'] <= end_d3)
+            filtered_ptw = df_ptw_master[mask_ptw].copy()
         else:
             # Fallback if no date column is found, just use the whole PTW
-            filtered_ptw = df_ptw.copy()
+            filtered_ptw = df_ptw_master.copy()
             
         if filtered_ptw.empty:
-            st.warning("⚠️ No PTW data found for the selected time period. (Note: The automated scraper currently caches PTW data starting from 1st Nov 2025).")
+            st.warning("⚠️ No PTW data found for the selected time period. (Note: PTW data is available starting from 1st Nov 2025).")
         else:
             ptw_col = next((c for c in filtered_ptw.columns if 'ptw' in c.lower() or 'request' in c.lower() or 'id' in c.lower()), None)
             feeder_col = next((c for c in filtered_ptw.columns if 'feeder' in c.lower()), None)
