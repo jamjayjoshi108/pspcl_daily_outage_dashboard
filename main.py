@@ -154,12 +154,27 @@ for d in [df_hist_curr, df_5day, df_today]:
 
 if dfs_to_combine:
     df_master = pd.concat(dfs_to_combine, ignore_index=True)
-    # Deduplicate rows by looking for an ID column, or using a subset fallback
-    id_col = next((c for c in df_master.columns if str(c).strip().lower() == 'id'), None)
-    if id_col:
-        df_master = df_master.drop_duplicates(subset=[id_col])
+    
+    # We must deduplicate carefully so we don't drop rows where the same Outage ID affects multiple Feeders!
+    dedup_cols = []
+    
+    # 1. Look for ID column
+    id_col = next((c for c in df_master.columns if str(c).strip().lower() == 'id' or 'outage id' in str(c).strip().lower()), None)
+    if id_col: dedup_cols.append(id_col)
+    
+    # 2. ALWAYS include Feeder if it exists, so we don't accidentally delete multiple feeders tied to one outage
+    if 'Feeder' in df_master.columns: dedup_cols.append('Feeder')
+    
+    # 3. Fallback if no ID is found
+    if not id_col:
+        for col in ['Circle', 'Start Time', 'Type of Outage']:
+            if col in df_master.columns: dedup_cols.append(col)
+            
+    if dedup_cols:
+        # keep='last' ensures if there's an overlap between today's live file and the history file, it keeps the freshest update
+        df_master = df_master.drop_duplicates(subset=dedup_cols, keep='last')
     else:
-        df_master = df_master.drop_duplicates(subset=['Circle', 'Feeder', 'Start Time', 'Type of Outage'])
+        df_master = df_master.drop_duplicates(keep='last')
 else:
     df_master = pd.DataFrame()
 
