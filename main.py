@@ -329,7 +329,7 @@ def create_bucket_pivot(df, bucket_order):
 
 # --- MAIN DASHBOARD RENDER ---
 #st.title("⚡ Power Outage Monitoring Dashboard")
-st.title("⚡ Under maintenance")
+st.title("⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡ Under maintenance ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡")
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📈 YoY Comparison", "🛠️ PTW Frequency"])
 
 # Add this temporary debug line:
