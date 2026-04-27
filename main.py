@@ -2019,8 +2019,6 @@ with tab3:
                     st.dataframe(repeat_feeders.style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
                 else:
                     st.success("No feeders had multiple PTWs requested against them in the selected timeframe! 🎉")
-
-
 # # # #  =======================================================================================================================================
 # # # #  =======================================================================================================================================
 # # # #V7
