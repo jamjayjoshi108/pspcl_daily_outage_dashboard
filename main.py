@@ -1621,7 +1621,7 @@ def render_date_selector(tab_key):
         )
     with col2:
         end_date = st.date_input(
-            "To Date", 
+            "To Date",
             value=calc_end, 
             format="DD/MM/YYYY", 
             disabled=(period != "Custom"),
