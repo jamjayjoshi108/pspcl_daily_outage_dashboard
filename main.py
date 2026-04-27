@@ -71,7 +71,6 @@ def fetch_api_data_in_batches(endpoint, start_date, end_date):
     current_start = start_date
     
     while current_start <= end_date:
-        # Define the end of the current 30-day batch (inclusive)
         current_end = min(current_start + timedelta(days=29), end_date)
         
         payload = {
@@ -89,7 +88,6 @@ def fetch_api_data_in_batches(endpoint, start_date, end_date):
         except Exception as e:
             st.error(f"API Error fetching {current_start} to {current_end}: {e}")
             
-        # Move to the next batch
         current_start = current_end + timedelta(days=1)
         
     return all_data
@@ -101,7 +99,6 @@ def normalize_api_data(raw_data, default_type="Unplanned Outage"):
         
     df = pd.DataFrame(raw_data)
     
-    # Map API keys to the original CSV column names
     rename_map = {
         'ptw_id': 'ID',
         'zone_name': 'Zone',
@@ -115,16 +112,13 @@ def normalize_api_data(raw_data, default_type="Unplanned Outage"):
     }
     df.rename(columns=lambda x: rename_map.get(x, x), inplace=True)
     
-    # Expand 'feeders' array into individual rows if present
     if 'feeders' in df.columns:
         df = df.explode('feeders')
         df.rename(columns={'feeders': 'Feeder'}, inplace=True)
         
-    # Ensure 'Type of Outage' exists so the dashboard KPIs don't break
     if 'Type of Outage' not in df.columns:
         df['Type of Outage'] = default_type
         
-    # Calculate Difference in minutes
     if 'Start Time' in df.columns and 'End Time' in df.columns:
         df['Start Time'] = pd.to_datetime(df['Start Time'], errors='coerce')
         df['End Time'] = pd.to_datetime(df['End Time'], errors='coerce')
@@ -134,9 +128,9 @@ def normalize_api_data(raw_data, default_type="Unplanned Outage"):
     return clean_outage_data(df)
 
 
-# --- 2. DATA CLEANING LOGIC (Untouched) ---
+# --- 2. DATA CLEANING LOGIC ---
 def clean_outage_data(df):
-    """Standardizes dates, buckets, and removes cancelled outages across all files."""
+    """Standardizes dates, buckets, and removes cancelled outages."""
     if df.empty: return df
     if 'Status' in df.columns:
         df = df[~df['Status'].astype(str).str.contains('Cancel', na=False, case=False)]
@@ -164,35 +158,43 @@ def clean_outage_data(df):
 
 
 # --- 3. DATA LOADING EXECUTION ---
-@st.cache_data(ttl="15m", show_spinner="Fetching Live Data from PSPCL API...")
-def load_api_data_ytd(endpoint, default_type):
-    # Fetch from Jan 1st of current year up to today
-    start_date = datetime(now_ist.year, 1, 1).date()
+@st.cache_data(ttl="15m", show_spinner=False)
+def load_api_data_rolling(endpoint, default_type, days_back=365):
+    # Fetch a rolling year of data so "Last 6 Months" filter actually has data
+    start_date = (now_ist - timedelta(days=days_back)).date()
     end_date = now_ist.date()
     
     raw_data = fetch_api_data_in_batches(endpoint, start_date, end_date)
     return normalize_api_data(raw_data, default_type)
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_historical_ly():
     df_25 = pd.read_csv('Historical_2025.csv') if os.path.exists('Historical_2025.csv') else pd.DataFrame()
     return clean_outage_data(df_25)
 
-# Load Live Data via API
-df_master = load_api_data_ytd("OutageAPI.getOutages", default_type="Unplanned Outage")
-df_ptw = load_api_data_ytd("OutageAPI.getPTWRequests", default_type="Planned Outage")
+# --- UI TITLE ---
+st.title("⚡ Power Outage Monitoring Dashboard")
 
-# Load YoY Historical Data
-df_hist_curr = df_master.copy() # Current year data is now driven entirely by the API
-df_hist_ly = load_historical_ly()
+# --- VISIBLE LOADING STATUS ---
+with st.status("🔄 Initializing Dashboard Data from API...", expanded=True) as status:
+    st.write("🔌 Fetching live Unplanned Outages (Rolling 365 days)...")
+    df_master = load_api_data_rolling("OutageAPI.getOutages", default_type="Unplanned Outage", days_back=365)
+    
+    st.write("🛠️ Fetching live PTW Requests (Rolling 60 days)...")
+    df_ptw = load_api_data_rolling("OutageAPI.getPTWRequests", default_type="Planned Outage", days_back=60)
+    
+    st.write("🕰️ Fetching YoY historical data...")
+    df_hist_curr = df_master.copy() 
+    df_hist_ly = load_historical_ly()
+    
+    status.update(label="✅ Dashboard Data Loaded Successfully!", state="complete", expanded=False)
 
 
-# --- 4. DASHBOARD HELPER FUNCTIONS (Untouched) ---
+# --- 4. DASHBOARD HELPER FUNCTIONS ---
 def render_date_selector(tab_key):
     """Reusable global date selector widget matching the horizontal UI"""
     st.markdown("📅 **Select Time Period:**")
     
-    # Horizontal radio buttons
     period = st.radio(
         "Select Time Period",
         options=["Today", "Current Month", "Last Month", "Last 3 Months", "Last 6 Months", "Custom"],
@@ -203,7 +205,6 @@ def render_date_selector(tab_key):
     
     today = now_ist.date()
     
-    # Calculate dates based on the radio selection
     if period == "Today":
         calc_start, calc_end = today, today
     elif period == "Current Month":
@@ -217,28 +218,15 @@ def render_date_selector(tab_key):
     elif period == "Last 6 Months":
         calc_start, calc_end = today - timedelta(days=180), today
     else: 
-        # For 'Custom', preserve what they pick in session state, defaulting to today
         calc_start = st.session_state.get(f"{tab_key}_custom_start", today)
         calc_end = st.session_state.get(f"{tab_key}_custom_end", today)
 
-    # Render From and To inputs side-by-side without keys so they respect the calculated 'value'
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input(
-            "From Date", 
-            value=calc_start, 
-            format="DD/MM/YYYY", 
-            disabled=(period != "Custom")
-        )
+        start_date = st.date_input("From Date", value=calc_start, format="DD/MM/YYYY", disabled=(period != "Custom"))
     with col2:
-        end_date = st.date_input(
-            "To Date", 
-            value=calc_end, 
-            format="DD/MM/YYYY", 
-            disabled=(period != "Custom")
-        )
+        end_date = st.date_input("To Date", value=calc_end, format="DD/MM/YYYY", disabled=(period != "Custom"))
         
-    # Save the custom dates if Custom is selected so they don't reset
     if period == "Custom":
         st.session_state[f"{tab_key}_custom_start"] = start_date
         st.session_state[f"{tab_key}_custom_end"] = end_date
@@ -342,13 +330,11 @@ def create_bucket_pivot(df, bucket_order):
     return pivot
 
 
-# --- MAIN DASHBOARD RENDER ---
-#st.title("⚡ Power Outage Monitoring Dashboard")
-st.title("⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡ Under maintenance ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡")
+# --- TABS RENDERING ---
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📈 YoY Comparison", "🛠️ PTW Frequency"])
 
 # Add this temporary debug line:
-st.warning(f"🛠️ DEBUG | Total Raw Rows in df_master: {len(df_master)}")
+st.warning(f"🛠️ DEBUG | Total Raw Rows Fetched from API: {len(df_master)}")
 
 # ==========================================
 # TAB 1: DASHBOARD (Unified & Filtered)
@@ -359,6 +345,8 @@ with tab1:
     st.divider()
 
     if not df_master.empty:
+        # Enforce date typing to ensure the mask works perfectly
+        df_master['Outage Date'] = pd.to_datetime(df_master['Outage Date']).dt.date
         mask_t1 = (df_master['Outage Date'] >= start_d1) & (df_master['Outage Date'] <= end_d1)
         filtered_tab1 = df_master[mask_t1].copy()
         st.warning(f"🛠️ DEBUG | Total Filtered Rows for selected dates: {len(filtered_tab1)}")
@@ -510,13 +498,14 @@ with tab2:
     if df_hist_curr.empty or df_hist_ly.empty:
         st.error("Historical Master Data not found or API returned empty for current year.")
     else:
-        # Calculate equivalent Last Year bounds automatically
         ly_start_d2 = safe_ly_date(start_d2)
         ly_end_d2 = safe_ly_date(end_d2)
         
+        df_hist_curr['Outage Date'] = pd.to_datetime(df_hist_curr['Outage Date']).dt.date
         mask_curr = (df_hist_curr['Outage Date'] >= start_d2) & (df_hist_curr['Outage Date'] <= end_d2)
         filtered_curr = df_hist_curr[mask_curr]
         
+        df_hist_ly['Outage Date'] = pd.to_datetime(df_hist_ly['Outage Date']).dt.date
         mask_ly = (df_hist_ly['Outage Date'] >= ly_start_d2) & (df_hist_ly['Outage Date'] <= ly_end_d2)
         filtered_ly = df_hist_ly[mask_ly]
 
@@ -573,14 +562,12 @@ with tab3:
     if df_ptw.empty:
         st.info("No PTW data available in the current timeframe.")
     else:
-        # Make sure PTW dates are parsed correctly
         date_col = next((c for c in df_ptw.columns if 'date' in c.lower() or 'time' in c.lower()), None)
         if date_col:
             df_ptw['Temp_Date'] = pd.to_datetime(df_ptw[date_col], errors='coerce').dt.date
             mask_ptw = (df_ptw['Temp_Date'] >= start_d3) & (df_ptw['Temp_Date'] <= end_d3)
             filtered_ptw = df_ptw[mask_ptw].copy()
         else:
-            # Fallback if no date column is found
             filtered_ptw = df_ptw.copy()
             
         if filtered_ptw.empty:
@@ -627,8 +614,6 @@ with tab3:
                     st.dataframe(repeat_feeders.style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
                 else:
                     st.success("No feeders had multiple PTWs requested against them in the selected timeframe! 🎉")
-
-
 # # # #  =======================================================================================================================================
 # # # #  =======================================================================================================================================
 # # # #V8
