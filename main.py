@@ -2480,20 +2480,46 @@ with tab1:
         st.divider()
 
         # --- 3. NOTORIOUS FEEDERS ---
-        st.subheader("🚨 Notorious Feeders (3+ Days of Outages)")
-        st.caption("Top 5 worst-performing feeders per circle based on days with outages in the selected period.")
+        st.subheader("🚨 Notorious Feeders")
+
+        # --- DYNAMIC THRESHOLD LOGIC BASED ON USER RULES ---
+        total_days = (end_d1 - start_d1).days + 1
+        
+        if total_days == 1:
+            # Rule 1 & 2: Single day selected (Today or Random Custom Day)
+            # Look back 3 days including the selected day. Threshold = 3.
+            noto_start_date = start_d1 - timedelta(days=2)
+            noto_end_date = end_d1
+            noto_threshold = 3
+            st.caption(f"Single day selected. Showing feeders that had outages on **all 3 days** between {noto_start_date.strftime('%d %b')} and {noto_end_date.strftime('%d %b')}.")
+        else:
+            # Rule 3: Date Range selected
+            # Apply the 3-out-of-7 days ratio. Minimum threshold is always 3.
+            noto_start_date = start_d1
+            noto_end_date = end_d1
+            noto_threshold = max(3, round(total_days * (3 / 7)))
+            st.caption(f"Range of {total_days} days selected. Applying 3-in-7 ratio: Feeders must have outages on at least **{noto_threshold} distinct days** to be flagged.")
+
+        # Re-filter the raw data based on the dynamic notorious date window
+        if not df_master.empty:
+            mask_noto = (df_master['Outage Date'] >= noto_start_date) & (df_master['Outage Date'] <= noto_end_date)
+            dyn_noto_df = df_master[mask_noto].copy()
+        else:
+            dyn_noto_df = pd.DataFrame()
 
         noto_col1, noto_col2 = st.columns(2)
-        all_circles = sorted(filtered_tab1['Circle'].dropna().unique().tolist())
+        all_circles = sorted(dyn_noto_df['Circle'].dropna().unique().tolist()) if not dyn_noto_df.empty else []
         with noto_col1: selected_notorious_circle = st.selectbox("Filter by Circle:", ["All Circles"] + all_circles, index=0, key="noto_circ")
         with noto_col2: selected_notorious_type = st.selectbox("Filter by Outage Type:", ["All Types", "Planned Outage", "Power Off By PC", "Unplanned Outage"], index=0, key="noto_type")
 
-        dyn_noto_df = filtered_tab1.copy()
-        if selected_notorious_type != "All Types": dyn_noto_df = dyn_noto_df[dyn_noto_df['Type of Outage'] == selected_notorious_type]
+        if selected_notorious_type != "All Types": 
+            dyn_noto_df = dyn_noto_df[dyn_noto_df['Type of Outage'] == selected_notorious_type]
 
         if not dyn_noto_df.empty:
             dyn_days = dyn_noto_df.groupby(['Circle', 'Feeder'])['Outage Date'].nunique().reset_index(name='Days with Outages')
-            dyn_noto = dyn_days[dyn_days['Days with Outages'] >= 3]
+            
+            # --- APPLY THE DYNAMIC THRESHOLD HERE ---
+            dyn_noto = dyn_days[dyn_days['Days with Outages'] >= noto_threshold]
 
             if not dyn_noto.empty:
                 dyn_stats = dyn_noto_df.groupby(['Circle', 'Feeder']).agg(Total_Events=('Start Time', 'size'), Max_Mins=('Diff in mins', 'max'), Total_Mins=('Diff in mins', 'sum')).reset_index()
@@ -2505,23 +2531,21 @@ with tab1:
                 dyn_noto = dyn_noto.merge(dyn_stats, on=['Circle', 'Feeder']).sort_values(by=['Circle', 'Days with Outages', 'Total Outage Events'], ascending=[True, False, False])
                 dyn_top5 = dyn_noto.groupby('Circle').head(5)
                 
-                # Global notorious set to flag rows in drill-down
+                # Global notorious set to flag rows in the drill-down table below
                 global_notorious_set = set(zip(dyn_top5['Circle'], dyn_top5['Feeder']))
                 
                 filtered_notorious = dyn_top5[dyn_top5['Circle'] == selected_notorious_circle] if selected_notorious_circle != "All Circles" else dyn_top5
 
                 if not filtered_notorious.empty:
                     st.dataframe(filtered_notorious.style.format({'Max Duration (Hours)': '{:.2f}', 'Total Duration (Hours)': '{:.2f}'}).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-                else: st.info(f"No notorious feeders found for {selected_notorious_circle} matching the criteria.")
+                else: 
+                    st.info(f"No notorious feeders found for {selected_notorious_circle} matching the criteria.")
             else: 
                 global_notorious_set = set()
-                st.info(f"No notorious feeders identified (no feeder had 3+ days of outages in this timeframe).")
+                st.info(f"No notorious feeders identified (no feeder hit the {noto_threshold}-day threshold). 🎉")
         else: 
             global_notorious_set = set()
-            st.info("No data available for the selected outage type.")
-
-
-        st.divider()
+            st.info("No data available for the selected outage type/range.")
 
         # --- 4. COMPREHENSIVE CIRCLE-WISE BREAKDOWN & DRILLDOWN ---
         st.subheader("🔌 Comprehensive Circle-wise Breakdown")
