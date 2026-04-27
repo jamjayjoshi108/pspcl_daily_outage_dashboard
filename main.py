@@ -55,7 +55,7 @@ now_ist = datetime.now(IST)
 
 # --- API CONFIG ---
 BASE_URL = "https://distribution.pspcl.in/returns/module.php"
-API_KEY = st.secrets["PSPCL_API_KEY"]
+API_KEY = "pdc@12345"
 
 
 # ============================================================
