@@ -53,6 +53,8 @@ st.markdown("""
         
         .status-badge { background-color: rgba(0, 0, 0, 0.25); padding: 3px 8px; border-radius: 4px; font-weight: 500; color: #FFFFFF !important; }
         [data-testid="stDataFrame"] > div { border: 2px solid #004085 !important; border-radius: 6px; overflow: hidden; }
+        
+        .loading-text-box { background-color: #F8F9FA; border-left: 4px solid #004085; padding: 10px 15px; border-radius: 4px; font-family: monospace; font-size: 0.95rem; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -60,36 +62,7 @@ st.markdown("""
 IST = timezone(timedelta(hours=5, minutes=30))
 now_ist = datetime.now(IST)
 
-# --- 1. API FETCHING LOGIC ---
-def fetch_api_data_in_batches(endpoint, start_date, end_date):
-    """Fetches data from the API in max 30-day increments."""
-    base_url = "https://distribution.pspcl.in"
-    url = f"{base_url}/returns/module.php?to={endpoint}"
-    api_key = "pdc@12345"
-    
-    all_data = []
-    current_start = start_date
-    
-    while current_start <= end_date:
-        current_end = min(current_start + timedelta(days=29), end_date)
-        payload = {
-            "fromdate": current_start.strftime("%Y-%m-%d"),
-            "todate": current_end.strftime("%Y-%m-%d"),
-            "apikey": api_key
-        }
-        try:
-            response = requests.post(url, json=payload, timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    all_data.extend(data)
-        except Exception as e:
-            st.error(f"API Error fetching {current_start} to {current_end}: {e}")
-            
-        current_start = current_end + timedelta(days=1)
-        
-    return all_data
-
+# --- 1. DATA NORMALIZATION LOGIC ---
 def normalize_api_data(raw_data, is_ptw=False, default_type="Unplanned Outage"):
     """Translates exact API JSON keys to the dataframe columns expected by the UI."""
     if not raw_data:
@@ -97,32 +70,16 @@ def normalize_api_data(raw_data, is_ptw=False, default_type="Unplanned Outage"):
         
     df = pd.DataFrame(raw_data)
     
-    # Strict API mapping based on provided schema
     rename_map = {
-        # Outages Keys
-        'outage_id': 'ID',
-        'outage_status': 'Status',
-        'created_time': 'Schedule Created At',
-        'start_time': 'Start Time',
-        'end_time': 'End Time',
-        'last_updated': 'Last Updated At',
-        'duration_minutes': 'Diff in mins',
-        'zone_name': 'Zone',
-        'circle_name': 'Circle',
-        'division_name': 'Division',
-        'feeder_name': 'Feeder',
-        'outage_type': 'Type of Outage',
-        
-        # PTW Specific Keys
-        'ptw_id': 'ID',
-        'current_status': 'Status',
-        'feeders': 'Feeder'
+        'outage_id': 'ID', 'outage_status': 'Status', 'created_time': 'Schedule Created At',
+        'start_time': 'Start Time', 'end_time': 'End Time', 'last_updated': 'Last Updated At',
+        'duration_minutes': 'Diff in mins', 'zone_name': 'Zone', 'circle_name': 'Circle',
+        'division_name': 'Division', 'feeder_name': 'Feeder', 'outage_type': 'Type of Outage',
+        'ptw_id': 'ID', 'current_status': 'Status', 'feeders': 'Feeder'
     }
     
-    # Rename matching columns
     df.rename(columns=lambda x: rename_map.get(str(x).lower().strip(), x), inplace=True)
     
-    # Instantly explode the Feeder array if it was passed as a JSON list
     if 'Feeder' in df.columns:
         if df['Feeder'].apply(lambda x: isinstance(x, list)).any():
             df = df.explode('Feeder')
@@ -131,16 +88,13 @@ def normalize_api_data(raw_data, is_ptw=False, default_type="Unplanned Outage"):
     if 'Type of Outage' not in df.columns and not is_ptw:
         df['Type of Outage'] = default_type
         
-    # Failsafes to prevent KeyErrors
     for req_col in ['Zone', 'Circle', 'Feeder', 'ID']:
         if req_col not in df.columns:
             df[req_col] = "Unknown"
             
-    # Time math formatting
     if 'Start Time' in df.columns and 'End Time' in df.columns:
         df['Start Time'] = pd.to_datetime(df['Start Time'], errors='coerce')
         df['End Time'] = pd.to_datetime(df['End Time'], errors='coerce')
-        # If the API didn't pass duration_minutes, calculate it
         if 'Diff in mins' not in df.columns:
             df['Diff in mins'] = (df['End Time'] - df['Start Time']).dt.total_seconds() / 60.0
             
@@ -180,40 +134,109 @@ def clean_outage_data(df):
     return df
 
 
-# --- 3. DATA LOADING EXECUTION ---
+# --- 3. DYNAMIC API FETCHING LOGIC (WITH UI) ---
 @st.cache_data(ttl="15m", show_spinner=False)
-def load_api_data_rolling(endpoint, default_type, is_ptw=False, days_back=365):
-    start_date = (now_ist - timedelta(days=days_back)).date()
-    end_date = now_ist.date()
-    raw_data = fetch_api_data_in_batches(endpoint, start_date, end_date)
-    return normalize_api_data(raw_data, is_ptw=is_ptw, default_type=default_type)
+def fetch_api_with_ui(_progress_bar, _status_text, endpoint, api_name, start_date, end_date, default_type, is_ptw):
+    """Fetches data from API in strict 30-day buckets, updating the provided Streamlit UI placeholders."""
+    base_url = "https://distribution.pspcl.in"
+    url = f"{base_url}/returns/module.php?to={endpoint}"
+    api_key = "pdc@12345"
+    
+    all_data = []
+    current_start = start_date
+    total_days = (end_date - start_date).days + 1
+    
+    if total_days <= 0:
+        _progress_bar.progress(1.0)
+        _status_text.success(f"✅ **{api_name}**: Date range is zero or negative. Loaded 0 records.")
+        return pd.DataFrame()
+
+    start_time = time.time()
+    
+    while current_start <= end_date:
+        # STRICT 30-DAY BUCKET CALCULATION (inclusive: start + 29 days = 30 days)
+        current_end = min(current_start + timedelta(days=29), end_date)
+        
+        # Calculate dynamic UI metrics
+        days_processed = (current_start - start_date).days
+        pct_complete = min(days_processed / total_days, 0.99)
+        elapsed = time.time() - start_time
+        
+        # Update progress bar and text UI
+        _progress_bar.progress(pct_complete)
+        _status_text.markdown(f"""
+            <div class="loading-text-box">
+                <b>📡 API Target:</b> {api_name}<br/>
+                <b>⏳ Fetching Bucket:</b> {current_start.strftime('%d %b %Y')} to {current_end.strftime('%d %b %Y')}<br/>
+                <b>📊 Progress:</b> {int(pct_complete * 100)}% Complete<br/>
+                <b>⏱️ Time Elapsed:</b> {elapsed:.1f} seconds
+            </div>
+        """, unsafe_allow_html=True)
+        
+        payload = {
+            "fromdate": current_start.strftime("%Y-%m-%d"),
+            "todate": current_end.strftime("%Y-%m-%d"),
+            "apikey": api_key
+        }
+        
+        try:
+            response = requests.post(url, json=payload, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    all_data.extend(data)
+        except Exception as e:
+            st.error(f"API Error fetching {current_start.strftime('%Y-%m-%d')}: {e}")
+            
+        current_start = current_end + timedelta(days=1)
+        
+    final_time = time.time() - start_time
+    _progress_bar.progress(1.0)
+    _status_text.success(f"✅ **{api_name} Data Fetched Successfully!** (100% Complete) | **Total Time:** {final_time:.1f}s | **Total Records:** {len(all_data):,}")
+    
+    return normalize_api_data(all_data, is_ptw=is_ptw, default_type=default_type)
 
 @st.cache_data(show_spinner=False)
 def load_historical_ly():
     df_25 = pd.read_csv('Historical_2025.csv') if os.path.exists('Historical_2025.csv') else pd.DataFrame()
     return clean_outage_data(df_25)
 
+
 # --- UI TITLE ---
 st.title("⚡ Power Outage Monitoring Dashboard")
 
-# --- VISIBLE LOADING STATUS ---
-with st.status("🔄 Initializing Dashboard Data from API...", expanded=True) as status:
-    st.write("🔌 Fetching live Unplanned Outages (Rolling 365 days)...")
-    df_master = load_api_data_rolling("OutageAPI.getOutages", default_type="Unplanned Outage", is_ptw=False, days_back=365)
+# --- VISIBLE REAL-TIME LOADING STATUS ---
+# Define strict start dates based on the rules
+outage_api_start = datetime(2026, 1, 1).date()
+ptw_api_start = datetime(2025, 11, 1).date()
+api_end_date = now_ist.date()
+
+with st.status("🔄 Initializing Dashboard Data...", expanded=True) as status:
+    st.markdown("### 🔌 Outages Data Tracker")
+    pb_outages = st.progress(0)
+    st_outages = st.empty()
+    df_master = fetch_api_with_ui(pb_outages, st_outages, "OutageAPI.getOutages", "Outages API", outage_api_start, api_end_date, "Unplanned Outage", False)
     
-    st.write("🛠️ Fetching live PTW Requests (Rolling 60 days)...")
-    df_ptw = load_api_data_rolling("OutageAPI.getPTWRequests", default_type="Planned Outage", is_ptw=True, days_back=60)
+    st.divider()
     
-    st.write("🕰️ Fetching YoY historical data...")
+    st.markdown("### 🛠️ PTW Requests Tracker")
+    pb_ptw = st.progress(0)
+    st_ptw = st.empty()
+    df_ptw = fetch_api_with_ui(pb_ptw, st_ptw, "OutageAPI.getPTWRequests", "PTW API", ptw_api_start, api_end_date, "Planned Outage", True)
+    
+    st.divider()
+    
+    st.markdown("### 🕰️ Historical Data Tracker")
+    st.info("Loading 2025 Historical Baseline (Local CSV)...")
     df_hist_curr = df_master.copy() 
     df_hist_ly = load_historical_ly()
+    st.success("✅ 2025 Historical Data Loaded Successfully!")
     
-    status.update(label="✅ Dashboard Data Loaded Successfully!", state="complete", expanded=False)
+    status.update(label="✅ All Dashboard Data Synchronized and Ready!", state="complete", expanded=False)
 
 
 # --- 4. DASHBOARD HELPER FUNCTIONS ---
 def render_date_selector(tab_key):
-    """Reusable global date selector widget matching the horizontal UI"""
     st.markdown("📅 **Select Time Period:**")
     
     period = st.radio(
@@ -458,7 +481,6 @@ with tab1:
             global_notorious_set = set()
             st.info("No data available for the selected outage type.")
 
-
         st.divider()
 
         # --- 4. COMPREHENSIVE CIRCLE-WISE BREAKDOWN & DRILLDOWN ---
@@ -587,13 +609,11 @@ with tab3:
     if df_ptw.empty:
         st.info("No PTW data available in the current timeframe.")
     else:
-        # Standardized keys based on normalization mapping
         ptw_col = 'ID'
         feeder_col = 'Feeder'
         status_col = 'Status'
         circle_col = 'Circle'
         
-        # Filter dates safely
         if 'Start Time' in df_ptw.columns:
             df_ptw['Temp_Date'] = pd.to_datetime(df_ptw['Start Time'], errors='coerce').dt.date
             mask_ptw = (df_ptw['Temp_Date'] >= start_d3) & (df_ptw['Temp_Date'] <= end_d3)
@@ -609,11 +629,9 @@ with tab3:
             else:
                 ptw_clean = filtered_ptw.copy()
                 
-                # Filter out cancelled
                 if status_col in ptw_clean.columns:
                     ptw_clean = ptw_clean[~ptw_clean[status_col].astype(str).str.contains('Cancel', na=False, case=False)]
 
-                # Exclude any empty strings after explosion
                 ptw_clean = ptw_clean[ptw_clean[feeder_col] != '']
 
                 group_cols = [feeder_col]
@@ -644,7 +662,6 @@ with tab3:
                     st.dataframe(repeat_feeders.style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
                 else:
                     st.success("No feeders had multiple PTWs requested against them in the selected timeframe! 🎉")
-
 
 # # # #  =======================================================================================================================================
 # # # #  =======================================================================================================================================
