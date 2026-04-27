@@ -99,8 +99,10 @@ def normalize_api_data(raw_data, default_type="Unplanned Outage"):
         
     df = pd.DataFrame(raw_data)
     
+    # Map common API key variations to standard names
     rename_map = {
         'ptw_id': 'ID',
+        'outage_id': 'ID',
         'zone_name': 'Zone',
         'circle_name': 'Circle',
         'division_name': 'Division',
@@ -108,16 +110,24 @@ def normalize_api_data(raw_data, default_type="Unplanned Outage"):
         'start_time': 'Start Time',
         'end_time': 'End Time',
         'creation_date': 'Schedule Created At',
-        'permit_no': 'Permit No'
+        'permit_no': 'Permit No',
+        'outage_type': 'Type of Outage',
+        'outagetype': 'Type of Outage',
+        'type_of_outage': 'Type of Outage'
     }
-    df.rename(columns=lambda x: rename_map.get(x, x), inplace=True)
+    df.rename(columns=lambda x: rename_map.get(str(x).lower(), x), inplace=True)
     
+    # Fallback to catch any column containing 'type' if 'Type of Outage' is STILL missing
+    if 'Type of Outage' not in df.columns:
+        type_cols = [c for c in df.columns if 'type' in str(c).lower() and c != 'Status']
+        if type_cols:
+            df.rename(columns={type_cols[0]: 'Type of Outage'}, inplace=True)
+        else:
+            df['Type of Outage'] = default_type
+            
     if 'feeders' in df.columns:
         df = df.explode('feeders')
         df.rename(columns={'feeders': 'Feeder'}, inplace=True)
-        
-    if 'Type of Outage' not in df.columns:
-        df['Type of Outage'] = default_type
         
     if 'Start Time' in df.columns and 'End Time' in df.columns:
         df['Start Time'] = pd.to_datetime(df['Start Time'], errors='coerce')
@@ -361,20 +371,31 @@ with tab1:
         unplanned_df = filtered_tab1[filtered_tab1['Type of Outage'] == 'Unplanned Outage']
 
         # --- 1. KPI WIDGETS ---
+        # Find the ID column to ensure we count unique Outage Events, not just rows/feeders
+        id_col = next((c for c in filtered_tab1.columns if str(c).strip().lower() in ['id', 'outage id']), None)
+        
+        def get_counts(df_sub):
+            if id_col:
+                tot = df_sub[id_col].nunique()
+                act = df_sub[df_sub['Status_Calc'] == 'Active'][id_col].nunique()
+                clo = df_sub[df_sub['Status_Calc'] == 'Closed'][id_col].nunique()
+            else:
+                tot = len(df_sub)
+                act = len(df_sub[df_sub['Status_Calc'] == 'Active'])
+                clo = len(df_sub[df_sub['Status_Calc'] == 'Closed'])
+            return tot, act, clo
+
+        tot_p, act_p, clo_p = get_counts(planned_df)
+        tot_pc, act_pc, clo_pc = get_counts(pc_df)
+        tot_u, act_u, clo_u = get_counts(unplanned_df)
+
         kpi1, kpi2, kpi3 = st.columns(3)
         with kpi1:
-            active_p = len(planned_df[planned_df['Status_Calc'] == 'Active']) if 'Status_Calc' in planned_df else 0
-            closed_p = len(planned_df[planned_df['Status_Calc'] == 'Closed']) if 'Status_Calc' in planned_df else len(planned_df)
-            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Planned Outages</div><div class="kpi-value">{len(planned_df)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_p}</span> <span class="status-badge">🟢 Closed: {closed_p}</span></div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Planned Outages</div><div class="kpi-value">{tot_p}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {act_p}</span> <span class="status-badge">🟢 Closed: {clo_p}</span></div></div>', unsafe_allow_html=True)
         with kpi2:
-            active_pc = len(pc_df[pc_df['Status_Calc'] == 'Active']) if 'Status_Calc' in pc_df else 0
-            closed_pc = len(pc_df[pc_df['Status_Calc'] == 'Closed']) if 'Status_Calc' in pc_df else len(pc_df)
-            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Power Off By PC</div><div class="kpi-value">{len(pc_df)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_pc}</span> <span class="status-badge">🟢 Closed: {closed_pc}</span></div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Power Off By PC</div><div class="kpi-value">{tot_pc}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {act_pc}</span> <span class="status-badge">🟢 Closed: {clo_pc}</span></div></div>', unsafe_allow_html=True)
         with kpi3:
-            active_u = len(unplanned_df[unplanned_df['Status_Calc'] == 'Active']) if 'Status_Calc' in unplanned_df else 0
-            closed_u = len(unplanned_df[unplanned_df['Status_Calc'] == 'Closed']) if 'Status_Calc' in unplanned_df else len(unplanned_df)
-            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Unplanned Outages</div><div class="kpi-value">{len(unplanned_df)}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {active_u}</span> <span class="status-badge">🟢 Closed: {closed_u}</span></div></div>', unsafe_allow_html=True)
-
+            st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Unplanned Outages</div><div class="kpi-value">{tot_u}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {act_u}</span> <span class="status-badge">🟢 Closed: {clo_u}</span></div></div>', unsafe_allow_html=True)
         st.divider()
 
         # --- 2. ZONE-WISE DISTRIBUTION ---
