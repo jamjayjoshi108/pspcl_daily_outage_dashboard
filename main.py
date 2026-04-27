@@ -55,7 +55,8 @@ now_ist = datetime.now(IST)
 
 # --- API CONFIG ---
 BASE_URL = "https://distribution.pspcl.in"
-API_KEY = st.secrets["PSPCL_API_KEY"]
+# API_KEY = st.secrets["PSPCL_API_KEY"]
+#API_KEY = "pdc@12345"
 
 # ---------------------------------------------------------------
 # API FETCH FUNCTIONS (replaces all scraping)
