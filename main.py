@@ -331,6 +331,9 @@ def create_bucket_pivot(df, bucket_order):
 st.title("⚡ Power Outage Monitoring Dashboard")
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "📈 YoY Comparison", "🛠️ PTW Frequency"])
 
+# Add this temporary debug line:
+st.warning(f"🛠️ DEBUG | Total Raw Rows in df_master: {len(df_master)}")
+
 # ==========================================
 # TAB 1: DASHBOARD (Unified & Filtered)
 # ==========================================
@@ -342,6 +345,7 @@ with tab1:
     if not df_master.empty:
         mask_t1 = (df_master['Outage Date'] >= start_d1) & (df_master['Outage Date'] <= end_d1)
         filtered_tab1 = df_master[mask_t1].copy()
+        st.warning(f"🛠️ DEBUG | Total Filtered Rows for selected dates: {len(filtered_tab1)}")
     else:
         filtered_tab1 = pd.DataFrame()
 
