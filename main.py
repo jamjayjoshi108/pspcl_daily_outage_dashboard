@@ -113,7 +113,8 @@ def normalize_api_data(raw_data, default_type="Unplanned Outage"):
         'permit_no': 'Permit No',
         'outage_type': 'Type of Outage',
         'outagetype': 'Type of Outage',
-        'type_of_outage': 'Type of Outage'
+        'type_of_outage': 'Type of Outage',
+        'status': 'Status'
     }
     df.rename(columns=lambda x: rename_map.get(str(x).lower(), x), inplace=True)
     
@@ -370,19 +371,22 @@ with tab1:
         pc_df = filtered_tab1[filtered_tab1['Type of Outage'] == 'Power Off By PC']
         unplanned_df = filtered_tab1[filtered_tab1['Type of Outage'] == 'Unplanned Outage']
 
-        # --- 1. KPI WIDGETS ---
+       # --- 1. KPI WIDGETS ---
         # Find the ID column to ensure we count unique Outage Events, not just rows/feeders
         id_col = next((c for c in filtered_tab1.columns if str(c).strip().lower() in ['id', 'outage id']), None)
         
         def get_counts(df_sub):
+            # Safe check: Does the Status_Calc column actually exist?
+            has_status = 'Status_Calc' in df_sub.columns
+            
             if id_col:
                 tot = df_sub[id_col].nunique()
-                act = df_sub[df_sub['Status_Calc'] == 'Active'][id_col].nunique()
-                clo = df_sub[df_sub['Status_Calc'] == 'Closed'][id_col].nunique()
+                act = df_sub[df_sub['Status_Calc'] == 'Active'][id_col].nunique() if has_status else 0
+                clo = df_sub[df_sub['Status_Calc'] == 'Closed'][id_col].nunique() if has_status else tot
             else:
                 tot = len(df_sub)
-                act = len(df_sub[df_sub['Status_Calc'] == 'Active'])
-                clo = len(df_sub[df_sub['Status_Calc'] == 'Closed'])
+                act = len(df_sub[df_sub['Status_Calc'] == 'Active']) if has_status else 0
+                clo = len(df_sub[df_sub['Status_Calc'] == 'Closed']) if has_status else tot
             return tot, act, clo
 
         tot_p, act_p, clo_p = get_counts(planned_df)
@@ -396,7 +400,7 @@ with tab1:
             st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Power Off By PC</div><div class="kpi-value">{tot_pc}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {act_pc}</span> <span class="status-badge">🟢 Closed: {clo_pc}</span></div></div>', unsafe_allow_html=True)
         with kpi3:
             st.markdown(f'<div class="kpi-card"><div><div class="kpi-title">Unplanned Outages</div><div class="kpi-value">{tot_u}</div></div><div class="kpi-subtext"><span class="status-badge">🔴 Active: {act_u}</span> <span class="status-badge">🟢 Closed: {clo_u}</span></div></div>', unsafe_allow_html=True)
-        st.divider()
+            
 
         # --- 2. ZONE-WISE DISTRIBUTION ---
         st.subheader("📍 Zone-wise Distribution")
