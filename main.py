@@ -1636,8 +1636,10 @@ def render_date_selector(tab_key):
     return start_date, end_date
 
 def safe_ly_date(dt):
-    try: return dt.replace(year=dt.year - 1)
-    except ValueError: return dt.replace(year=dt.year - 1, day=28)
+    try:
+        return dt.replace(year=dt.year - 1)
+    except ValueError:
+        return dt.replace(year=dt.year - 1, day=28)
 
 def generate_yoy_dist_expanded(df_curr, df_ly, group_col):
     def _agg(df, prefix):
