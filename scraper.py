@@ -154,8 +154,8 @@ try:
     WebDriverWait(driver, 60).until(EC.frame_to_be_available_and_switch_to_it("workFrame"))
 
     ptw_to_date = today_str
-    ptw_from_date = (today - timedelta(days=7)).strftime("%Y-%m-%d")
-    ptw_filename = f"{today_str}_PTW_Last_7_Days.csv"
+    ptw_from_date = "2025-11-01"   # <--- UPDATED TO 1ST NOV 2025
+    ptw_filename = f"{today_str}_PTW_Since_1_Nov_2025.csv" # 
 
     print(f"PTW Cycle locked in! From: {ptw_from_date} To: {ptw_to_date}")
 
