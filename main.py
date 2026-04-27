@@ -2326,6 +2326,19 @@ def highlight_delta(val):
         elif val < 0: return 'color: #388E3C; font-weight: bold;'
     return ''
 
+def style_pct_change(val):
+    if isinstance(val, str) and '%' in val:
+        try:
+            # Strip out the % and + signs to evaluate the pure number
+            num = float(val.replace('%', '').replace('+', ''))
+            if num > 0: 
+                return 'color: #D32F2F; font-weight: bold;' # Red (Increase in outages = Bad)
+            elif num < 0: 
+                return 'color: #388E3C; font-weight: bold;' # Green (Decrease in outages = Good)
+        except ValueError:
+            pass
+    return ''
+            
 def create_bucket_pivot(df, bucket_order):
     if df.empty: return pd.DataFrame(columns=bucket_order + ['Total'])
     pivot = pd.crosstab(df['Circle'], df['Duration Bucket'])
@@ -2333,49 +2346,73 @@ def create_bucket_pivot(df, bucket_order):
     pivot['Total'] = pivot.sum(axis=1)
     return pivot
 def build_weekly_yoy_table(df_curr, df_ly, curr_yr, ly_yr):
-    """Transforms raw YoY data into a Weekly comparison table matching the requested format."""
+    """Transforms raw YoY data into a Weekly comparison table with Grand Totals and % Change."""
     def _process(df, yr):
         if df.empty: return pd.DataFrame()
         d = df.copy()
-        # Ensure date format to extract Month and Week details
         d['DateObj'] = pd.to_datetime(d['Outage Date'])
         d['Month_Num'] = d['DateObj'].dt.month
-        # Calculate Week 1, 2, 3, 4, 5 of that specific month
         d['Week_Num'] = ((d['DateObj'].dt.day - 1) // 7) + 1
         d['Week_Label'] = d['DateObj'].dt.strftime('%b') + " w" + d['Week_Num'].astype(str)
-        
-        # Ensure exact matching for the 'Power off by PC' column from your image
         d['Type of Outage'] = d['Type of Outage'].replace({'Power Off By PC': 'Power off by PC'})
         
-        # Group and count occurrences
         grp = d.groupby(['Month_Num', 'Week_Num', 'Week_Label', 'Type of Outage']).size().unstack(fill_value=0)
         return grp.rename(columns=lambda x: f"{x} ({yr})").reset_index()
 
-    # Process both datasets
     c_grp = _process(df_curr, curr_yr)
     l_grp = _process(df_ly, ly_yr)
 
     if c_grp.empty and l_grp.empty: return pd.DataFrame()
     
-    # Merge current and last year on the exact same weeks securely
     if c_grp.empty: merged = l_grp
     elif l_grp.empty: merged = c_grp
     else: merged = pd.merge(c_grp, l_grp, on=['Month_Num', 'Week_Num', 'Week_Label'], how='outer').fillna(0)
 
-    # Sort chronologically (Jan w1 -> Jan w2 ... Apr w1)
     merged = merged.sort_values(['Month_Num', 'Week_Num']).reset_index(drop=True)
     
-    # Structure final requested column order
     cols_order = ['Week_Label']
     outage_types = ['Planned Outage', 'Unplanned Outage', 'Power off by PC']
+    pct_cols = []
     
     for ot in outage_types:
         c_col, l_col = f"{ot} ({curr_yr})", f"{ot} ({ly_yr})"
+        pct_col = f"{ot} (% Change)"
+        pct_cols.append(pct_col)
+        
         if c_col not in merged.columns: merged[c_col] = 0
         if l_col not in merged.columns: merged[l_col] = 0
         merged[c_col] = merged[c_col].astype(int)
         merged[l_col] = merged[l_col].astype(int)
-        cols_order.extend([c_col, l_col])
+        
+        # Calculate % Change row by row safely
+        def calc_pct(row):
+            c, l = row[c_col], row[l_col]
+            if l == 0 and c == 0: return 0.0
+            if l == 0: return 100.0  # Fallback if LY was 0 but this year has outages
+            return ((c - l) / l) * 100.0
+            
+        merged[pct_col] = merged.apply(calc_pct, axis=1)
+        cols_order.extend([c_col, l_col, pct_col])
+
+    # Append Grand Total Row
+    total_row = {'Week_Label': 'Grand Total', 'Month_Num': 99, 'Week_Num': 99}
+    for ot in outage_types:
+        c_col, l_col = f"{ot} ({curr_yr})", f"{ot} ({ly_yr})"
+        pct_col = f"{ot} (% Change)"
+        
+        c_sum, l_sum = merged[c_col].sum(), merged[l_col].sum()
+        total_row[c_col] = c_sum
+        total_row[l_col] = l_sum
+        
+        if l_sum == 0 and c_sum == 0: total_row[pct_col] = 0.0
+        elif l_sum == 0: total_row[pct_col] = 100.0
+        else: total_row[pct_col] = ((c_sum - l_sum) / l_sum) * 100.0
+
+    merged = pd.concat([merged, pd.DataFrame([total_row])], ignore_index=True)
+
+    # Format percentages as strings with '+' or '-' signs
+    for pct_col in pct_cols:
+        merged[pct_col] = merged[pct_col].apply(lambda x: f"{x:+.1f}%" if pd.notnull(x) else "")
 
     return merged[cols_order].rename(columns={'Week_Label': 'Weekly'})
 
@@ -2551,7 +2588,29 @@ with tab2:
         ly_year_str = str(now_ist.year - 1)
 
         # ---------------------------------------------------------
-        # TABLE 1: YTD Auto-Growing Table (Jan 1st till Today)
+        # TABLE 1: User Selected Date Range Table (Moved to TOP)
+        # ---------------------------------------------------------
+        st.subheader("🔍 Selected Date Range Weekly Breakdown")
+        
+        ly_start_d2 = safe_ly_date(start_d2)
+        ly_end_d2 = safe_ly_date(end_d2)
+        
+        mask_curr = (df_hist_curr['Outage Date'] >= start_d2) & (df_hist_curr['Outage Date'] <= end_d2)
+        mask_ly = (df_hist_ly['Outage Date'] >= ly_start_d2) & (df_hist_ly['Outage Date'] <= ly_end_d2)
+        
+        custom_table = build_weekly_yoy_table(df_hist_curr[mask_curr], df_hist_ly[mask_ly], curr_year_str, ly_year_str)
+
+        if not custom_table.empty:
+            pct_cols = [c for c in custom_table.columns if '% Change' in c]
+            styled_custom = custom_table.style.map(style_pct_change, subset=pct_cols).set_table_styles(HEADER_STYLES)
+            st.dataframe(styled_custom, width="stretch", hide_index=True)
+        else:
+            st.info("No data available for the selected date range.")
+
+        st.divider()
+
+        # ---------------------------------------------------------
+        # TABLE 2: YTD Auto-Growing Table (Jan 1st till Today)
         # ---------------------------------------------------------
         st.subheader(f"📅 Year-to-Date Weekly Trend (Jan 1st - Today)")
         
@@ -2566,75 +2625,56 @@ with tab2:
         ytd_table = build_weekly_yoy_table(df_hist_curr[mask_ytd_curr], df_hist_ly[mask_ytd_ly], curr_year_str, ly_year_str)
         
         if not ytd_table.empty:
-            st.dataframe(ytd_table.style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
+            pct_cols = [c for c in ytd_table.columns if '% Change' in c]
+            styled_ytd = ytd_table.style.map(style_pct_change, subset=pct_cols).set_table_styles(HEADER_STYLES)
+            st.dataframe(styled_ytd, width="stretch", hide_index=True)
         else:
             st.info("No YTD data available.")
 
-        st.divider()
-
-        # ---------------------------------------------------------
-        # TABLE 2: User Selected Date Range Table
-        # ---------------------------------------------------------
-        st.subheader("🔍 Selected Date Range Weekly Breakdown")
-        
-        ly_start_d2 = safe_ly_date(start_d2)
-        ly_end_d2 = safe_ly_date(end_d2)
-        
-        mask_curr = (df_hist_curr['Outage Date'] >= start_d2) & (df_hist_curr['Outage Date'] <= end_d2)
-        mask_ly = (df_hist_ly['Outage Date'] >= ly_start_d2) & (df_hist_ly['Outage Date'] <= ly_end_d2)
-        
-        custom_table = build_weekly_yoy_table(df_hist_curr[mask_curr], df_hist_ly[mask_ly], curr_year_str, ly_year_str)
-
-        if not custom_table.empty:
-            st.dataframe(custom_table.style.set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-        else:
-            st.info("No data available for the selected date range.")
 
         # =========================================================
-        # COMMENTED OUT: OLD DRILL-DOWN LOGIC
+        # COMMENTED OUT: OLD DRILL-DOWN LOGIC (Using # to avoid Streamlit Magic printing)
         # =========================================================
-        """
-        st.markdown(f"### 📍 1. Zone-wise Distribution")
-        st.caption("Includes total counts, total hours, and average hours. Click any row to drill down.")
-        
-        filtered_curr = df_hist_curr[mask_curr]
-        filtered_ly = df_hist_ly[mask_ly]
-        yoy_zone = generate_yoy_dist_expanded(filtered_curr, filtered_ly, 'Zone')
-        
-        zone_selection = st.dataframe(
-            yoy_zone.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), 
-            width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row"
-        )
-
-        if len(zone_selection.selection.rows) > 0:
-            selected_zone = yoy_zone.iloc[zone_selection.selection.rows[0]]['Zone']
-            
-            if selected_zone != 'Grand Total':
-                st.markdown(f"### 🎯 2. Circle-wise Distribution for **{selected_zone}**")
-                st.caption("Click any row to drill down into Feeder-wise data.")
-                
-                curr_zone_df = filtered_curr[filtered_curr['Zone'] == selected_zone]
-                ly_zone_df = filtered_ly[filtered_ly['Zone'] == selected_zone]
-                
-                yoy_circle = generate_yoy_dist_expanded(curr_zone_df, ly_zone_df, 'Circle')
-                
-                circle_selection = st.dataframe(
-                    yoy_circle.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), 
-                    width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row"
-                )
-
-                if len(circle_selection.selection.rows) > 0:
-                    selected_circle = yoy_circle.iloc[circle_selection.selection.rows[0]]['Circle']
-                    
-                    if selected_circle != 'Grand Total':
-                        st.markdown(f"### 🔌 3. Feeder-wise Distribution for **{selected_circle}**")
-                        
-                        curr_circle_df = curr_zone_df[curr_zone_df['Circle'] == selected_circle]
-                        ly_circle_df = ly_zone_df[ly_zone_df['Circle'] == selected_circle]
-                        
-                        yoy_feeder = generate_yoy_dist_expanded(curr_circle_df, ly_circle_df, 'Feeder')
-                        st.dataframe(yoy_feeder.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
-        """
+        # st.markdown(f"### 📍 1. Zone-wise Distribution")
+        # st.caption("Includes total counts, total hours, and average hours. Click any row to drill down.")
+        # 
+        # filtered_curr = df_hist_curr[mask_curr]
+        # filtered_ly = df_hist_ly[mask_ly]
+        # yoy_zone = generate_yoy_dist_expanded(filtered_curr, filtered_ly, 'Zone')
+        # 
+        # zone_selection = st.dataframe(
+        #     yoy_zone.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), 
+        #     width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row"
+        # )
+        # 
+        # if len(zone_selection.selection.rows) > 0:
+        #     selected_zone = yoy_zone.iloc[zone_selection.selection.rows[0]]['Zone']
+        #     
+        #     if selected_zone != 'Grand Total':
+        #         st.markdown(f"### 🎯 2. Circle-wise Distribution for **{selected_zone}**")
+        #         st.caption("Click any row to drill down into Feeder-wise data.")
+        #         
+        #         curr_zone_df = filtered_curr[filtered_curr['Zone'] == selected_zone]
+        #         ly_zone_df = filtered_ly[filtered_ly['Zone'] == selected_zone]
+        #         
+        #         yoy_circle = generate_yoy_dist_expanded(curr_zone_df, ly_zone_df, 'Circle')
+        #         
+        #         circle_selection = st.dataframe(
+        #             yoy_circle.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), 
+        #             width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row"
+        #         )
+        # 
+        #         if len(circle_selection.selection.rows) > 0:
+        #             selected_circle = yoy_circle.iloc[circle_selection.selection.rows[0]]['Circle']
+        #             
+        #             if selected_circle != 'Grand Total':
+        #                 st.markdown(f"### 🔌 3. Feeder-wise Distribution for **{selected_circle}**")
+        #                 
+        #                 curr_circle_df = curr_zone_df[curr_zone_df['Circle'] == selected_circle]
+        #                 ly_circle_df = ly_zone_df[ly_zone_df['Circle'] == selected_circle]
+        #                 
+        #                 yoy_feeder = generate_yoy_dist_expanded(curr_circle_df, ly_circle_df, 'Feeder')
+        #                 st.dataframe(yoy_feeder.style.map(highlight_delta, subset=['YoY Delta (Total)']).format(precision=2).set_table_styles(HEADER_STYLES), width="stretch", hide_index=True)
 # ==========================================
 # TAB 3: PTW FREQUENCY
 # ==========================================
