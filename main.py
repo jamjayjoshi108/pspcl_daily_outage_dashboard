@@ -1576,62 +1576,67 @@ else:
     df_master = pd.DataFrame()
 
 
+def handle_period_change(tab_key):
+    """Callback function to update dates in session state when the radio button is clicked."""
+    period = st.session_state[f"{tab_key}_radio"]
+    today = now_ist.date()
+    
+    if period == "Today":
+        st.session_state[f"{tab_key}_start_date"] = today
+        st.session_state[f"{tab_key}_end_date"] = today
+    elif period == "Current Month":
+        st.session_state[f"{tab_key}_start_date"] = today.replace(day=1)
+        st.session_state[f"{tab_key}_end_date"] = today
+    elif period == "Last Month":
+        first_of_this_month = today.replace(day=1)
+        last_of_last_month = first_of_this_month - timedelta(days=1)
+        st.session_state[f"{tab_key}_start_date"] = last_of_last_month.replace(day=1)
+        st.session_state[f"{tab_key}_end_date"] = last_of_last_month
+    elif period == "Last 3 Months":
+        st.session_state[f"{tab_key}_start_date"] = today - timedelta(days=90)
+        st.session_state[f"{tab_key}_end_date"] = today
+    elif period == "Last 6 Months":
+        st.session_state[f"{tab_key}_start_date"] = today - timedelta(days=180)
+        st.session_state[f"{tab_key}_end_date"] = today
+    # If 'Custom', we don't overwrite anything and let the user pick.
+
+
 def render_date_selector(tab_key):
-    """Reusable global date selector widget matching the horizontal UI"""
+    """Reusable global date selector widget with static keys and session state callbacks."""
     st.markdown("📅 **Select Time Period:**")
     
-    # Horizontal radio buttons
+    # 1. Initialize session state defaults if they don't exist yet so the widgets don't crash
+    if f"{tab_key}_start_date" not in st.session_state:
+        st.session_state[f"{tab_key}_start_date"] = now_ist.date()
+        st.session_state[f"{tab_key}_end_date"] = now_ist.date()
+        
+    # 2. Render the Radio button with an on_change callback
     period = st.radio(
         "Select Time Period",
         options=["Today", "Current Month", "Last Month", "Last 3 Months", "Last 6 Months", "Custom"],
         horizontal=True,
         label_visibility="collapsed",
-        key=f"{tab_key}_radio"
+        key=f"{tab_key}_radio",
+        on_change=handle_period_change,
+        args=(tab_key,)
     )
-    
-    today = now_ist.date()
-    
-    # Calculate dates based on the radio selection
-    if period == "Today":
-        calc_start, calc_end = today, today
-    elif period == "Current Month":
-        calc_start, calc_end = today.replace(day=1), today
-    elif period == "Last Month":
-        first_of_this_month = today.replace(day=1)
-        last_of_last_month = first_of_this_month - timedelta(days=1)
-        calc_start, calc_end = last_of_last_month.replace(day=1), last_of_last_month
-    elif period == "Last 3 Months":
-        calc_start, calc_end = today - timedelta(days=90), today
-    elif period == "Last 6 Months":
-        calc_start, calc_end = today - timedelta(days=180), today
-    else: 
-        # For 'Custom', preserve what they pick in session state, defaulting to today
-        calc_start = st.session_state.get(f"{tab_key}_custom_start", today)
-        calc_end = st.session_state.get(f"{tab_key}_custom_end", today)
 
-    # Render From and To inputs with dynamic keys so they remount and respect the calculated 'value'
+    # 3. Render the Date Inputs linked directly to the strictly static session state keys
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input(
             "From Date", 
-            value=calc_start, 
             format="DD/MM/YYYY", 
             disabled=(period != "Custom"),
-            key=f"start_{tab_key}_{period}"  # <-- Added dynamic key
+            key=f"{tab_key}_start_date" # Strictly static key
         )
     with col2:
         end_date = st.date_input(
             "To Date",
-            value=calc_end, 
             format="DD/MM/YYYY", 
             disabled=(period != "Custom"),
-            key=f"end_{tab_key}_{period}"    # <-- Added dynamic key
+            key=f"{tab_key}_end_date"   # Strictly static key
         )
-        
-    # Save the custom dates if Custom is selected so they don't reset
-    if period == "Custom":
-        st.session_state[f"{tab_key}_custom_start"] = start_date
-        st.session_state[f"{tab_key}_custom_end"] = end_date
         
     return start_date, end_date
 
