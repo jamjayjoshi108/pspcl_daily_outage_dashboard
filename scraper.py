@@ -138,6 +138,60 @@ try:
         
         time.sleep(3) 
 
+    # # ---------------------------------------------------------
+    # # STEP 10: Navigate to PTW Requests
+    # # ---------------------------------------------------------
+    # print("\n--- Switching to PTW Extraction ---")
+    # driver.switch_to.default_content()
+    # WebDriverWait(driver, 60).until(EC.frame_to_be_available_and_switch_to_it("leftFrame"))
+    
+    # view_ptw_btn = WebDriverWait(driver, 60).until(
+    #     EC.element_to_be_clickable((By.XPATH, "//a[@title='View PTW Requests']"))
+    # )
+    # view_ptw_btn.click()
+
+    # driver.switch_to.default_content()
+    # WebDriverWait(driver, 60).until(EC.frame_to_be_available_and_switch_to_it("workFrame"))
+
+    # ptw_to_date = today_str
+    # ptw_from_date = "2025-11-01"   # <--- UPDATED TO 1ST NOV 2025
+    # ptw_filename = f"{today_str}_PTW_Since_1_Nov_2025.csv" # 
+
+    # print(f"PTW Cycle locked in! From: {ptw_from_date} To: {ptw_to_date}")
+
+    # from_date_input = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, "//*[@id='fromdate']")))
+    # driver.execute_script(f"arguments[0].value = '{ptw_from_date}';", from_date_input)
+    # driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", from_date_input)
+    # time.sleep(3) 
+
+    # to_date_input = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//*[@id='todate']")))
+    # driver.execute_script(f"arguments[0].value = '{ptw_to_date}';", to_date_input)
+    # driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", to_date_input)
+    # time.sleep(3) 
+
+    # input_file = os.path.join(download_dir, "export.csv")
+    # if os.path.exists(input_file): os.remove(input_file)
+    # if os.path.exists(os.path.join(download_dir, ptw_filename)): os.remove(os.path.join(download_dir, ptw_filename))
+
+    # download_btn = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//img[@title='Export to Spreadsheet']")))
+    # download_btn.click()
+    
+    # timeout, elapsed = 120, 0
+    # while not os.path.exists(input_file) and elapsed < timeout:
+    #     time.sleep(1)
+    #     elapsed += 1
+        
+    # if not os.path.exists(input_file): raise FileNotFoundError("PTW Download timed out!")
+    
+    # # Rename in main folder (Overwrites if it already exists for today)
+    # os.rename(input_file, os.path.join(download_dir, ptw_filename))
+    # print(f"PTW File saved to main: {ptw_filename}")
+    
+    # # Save a timestamped copy to the archive folder
+    # ts = datetime.now().strftime("%H%M%S")
+    # archive_ptw_name = ptw_filename.replace('.csv', f'_{ts}.csv')
+    # shutil.copy(os.path.join(download_dir, ptw_filename), os.path.join(archive_dir, archive_ptw_name))
+    # print(f"Timestamped PTW copy saved to archive: {archive_ptw_name}")
     # ---------------------------------------------------------
     # STEP 10: Navigate to PTW Requests
     # ---------------------------------------------------------
@@ -154,20 +208,18 @@ try:
     WebDriverWait(driver, 60).until(EC.frame_to_be_available_and_switch_to_it("workFrame"))
 
     ptw_to_date = today_str
-    ptw_from_date = "2025-11-01"   # <--- UPDATED TO 1ST NOV 2025
-    ptw_filename = f"{today_str}_PTW_Since_1_Nov_2025.csv" # 
+    ptw_from_date = "2025-11-01"   # <--- 1ST NOV 2025
+    ptw_filename = f"{today_str}_PTW_Historical.csv" 
 
     print(f"PTW Cycle locked in! From: {ptw_from_date} To: {ptw_to_date}")
 
+    # Set dates WITHOUT firing the 'change' event to prevent browser grid freeze
     from_date_input = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, "//*[@id='fromdate']")))
     driver.execute_script(f"arguments[0].value = '{ptw_from_date}';", from_date_input)
-    driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", from_date_input)
-    time.sleep(3) 
-
+    
     to_date_input = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, "//*[@id='todate']")))
     driver.execute_script(f"arguments[0].value = '{ptw_to_date}';", to_date_input)
-    driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", to_date_input)
-    time.sleep(3) 
+    time.sleep(2) 
 
     input_file = os.path.join(download_dir, "export.csv")
     if os.path.exists(input_file): os.remove(input_file)
@@ -176,23 +228,18 @@ try:
     download_btn = WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.XPATH, "//img[@title='Export to Spreadsheet']")))
     download_btn.click()
     
-    timeout, elapsed = 120, 0
+    # Increased timeout to 5 minutes (300 seconds) because historical files take a long time to build
+    timeout, elapsed = 300, 0
     while not os.path.exists(input_file) and elapsed < timeout:
         time.sleep(1)
         elapsed += 1
         
-    if not os.path.exists(input_file): raise FileNotFoundError("PTW Download timed out!")
+    if not os.path.exists(input_file): raise FileNotFoundError("PTW Historical Download timed out!")
     
-    # Rename in main folder (Overwrites if it already exists for today)
+    # Rename in main folder
     os.rename(input_file, os.path.join(download_dir, ptw_filename))
     print(f"PTW File saved to main: {ptw_filename}")
     
-    # Save a timestamped copy to the archive folder
-    ts = datetime.now().strftime("%H%M%S")
-    archive_ptw_name = ptw_filename.replace('.csv', f'_{ts}.csv')
-    shutil.copy(os.path.join(download_dir, ptw_filename), os.path.join(archive_dir, archive_ptw_name))
-    print(f"Timestamped PTW copy saved to archive: {archive_ptw_name}")
-
     # ---------------------------------------------------------
     # STEP 11: Clean Up Main Directory (Move old files to archive)
     # ---------------------------------------------------------
