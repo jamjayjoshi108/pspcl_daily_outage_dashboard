@@ -164,50 +164,58 @@ else:
     df_master = pd.DataFrame()
 
 
-# --- HELPER FUNCTIONS ---
 def render_date_selector(tab_key):
-    """Reusable global date selector widget"""
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        period = st.selectbox(
-            "📅 Select Time Period:",
-            ["Today", "Current Month", "Last Month", "Last 3 Months", "Last 6 Months", "Custom"],
-            key=f"{tab_key}_period"
-        )
+    """Reusable global date selector widget matching the horizontal UI"""
+    st.markdown("📅 **Select Time Period:**")
+    
+    # Horizontal radio buttons
+    period = st.radio(
+        "Select Time Period",
+        options=["Today", "Current Month", "Last Month", "Last 3 Months", "Last 6 Months", "Custom"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key=f"{tab_key}_radio"
+    )
     
     today = now_ist.date()
-    start_date, end_date = today, today
     
+    # Calculate dates based on the radio selection
+    if period == "Today":
+        calc_start, calc_end = today, today
+    elif period == "Current Month":
+        calc_start, calc_end = today.replace(day=1), today
+    elif period == "Last Month":
+        first_of_this_month = today.replace(day=1)
+        last_of_last_month = first_of_this_month - timedelta(days=1)
+        calc_start, calc_end = last_of_last_month.replace(day=1), last_of_last_month
+    elif period == "Last 3 Months":
+        calc_start, calc_end = today - timedelta(days=90), today
+    elif period == "Last 6 Months":
+        calc_start, calc_end = today - timedelta(days=180), today
+    else: 
+        # For 'Custom', preserve what they pick in session state, defaulting to today
+        calc_start = st.session_state.get(f"{tab_key}_start", today)
+        calc_end = st.session_state.get(f"{tab_key}_end", today)
+
+    # Render From and To inputs side-by-side
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input(
+            "From Date", 
+            value=calc_start, 
+            format="DD/MM/YYYY", 
+            disabled=(period != "Custom"), # Locks the box unless 'Custom' is selected
+            key=f"{tab_key}_start"
+        )
     with col2:
-        if period == "Custom":
-            custom_dates = st.date_input(
-                "Select Start and End Date:",
-                value=(today, today),
-                max_value=today,
-                format="DD/MM/YYYY",
-                key=f"{tab_key}_custom"
-            )
-            if isinstance(custom_dates, tuple) and len(custom_dates) == 2:
-                start_date, end_date = custom_dates
-        else:
-            if period == "Today":
-                start_date, end_date = today, today
-            elif period == "Current Month":
-                start_date, end_date = today.replace(day=1), today
-            elif period == "Last Month":
-                first_of_this_month = today.replace(day=1)
-                last_of_last_month = first_of_this_month - timedelta(days=1)
-                start_date, end_date = last_of_last_month.replace(day=1), last_of_last_month
-            elif period == "Last 3 Months":
-                start_date, end_date = today - timedelta(days=90), today
-            elif period == "Last 6 Months":
-                start_date, end_date = today - timedelta(days=180), today
-            
-            st.text_input("Date Range Applied (DD/MM/YYYY):", 
-                          value=f"{start_date.strftime('%d/%m/%Y')}  to  {end_date.strftime('%d/%m/%Y')}", 
-                          disabled=True, 
-                          key=f"{tab_key}_display")
-                          
+        end_date = st.date_input(
+            "To Date", 
+            value=calc_end, 
+            format="DD/MM/YYYY", 
+            disabled=(period != "Custom"),
+            key=f"{tab_key}_end"
+        )
+        
     return start_date, end_date
 
 def safe_ly_date(dt):
